@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, Component, ReactNode } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Mic, MicOff, Loader2, MessageCircleQuestion, BookOpen } from "lucide-react";
+import { Send, Mic, MicOff, Loader2, MessageCircleQuestion, BookOpen, Lightbulb, Sparkles } from "lucide-react";
 import { useCurrentAuthUser } from "@/hooks/useCurrentAuthUser";
 import { toast } from "sonner";
 import "katex/dist/katex.min.css";
@@ -62,6 +62,8 @@ interface Message {
   suggestions?: AITextAnswerSuggestion[];
   isDocGrounded?: boolean;
   noContent?: boolean;
+  examTip?: string;
+  realLifeExample?: string;
 }
 
 const trimForTitle = (s: string) => {
@@ -384,6 +386,8 @@ export const DoubtsTab = ({
           slidePreview: d.slide_preview?.found ? d.slide_preview : null,
           suggestions: Array.isArray(d.suggestions) ? d.suggestions : [],
           isDocGrounded: !!d.is_doc_grounded,
+          examTip: d.exam_tip || d.quick_tip || undefined,
+          realLifeExample: d.real_life_example || d.example || undefined,
         },
       ]);
     } catch (err: any) {
@@ -491,6 +495,30 @@ export const DoubtsTab = ({
               {msg.role === "assistant" && msg.slidePreview?.found && (
                 <DoubtsErrorBoundary label={`slides#${i}`}>
                   <SlidePreviewPlayer preview={msg.slidePreview} />
+                </DoubtsErrorBoundary>
+              )}
+              {msg.role === "assistant" && (msg.examTip || msg.realLifeExample) && (
+                <DoubtsErrorBoundary label={`tips#${i}`}>
+                  <div className="max-w-[92%] sm:max-w-[85%] space-y-2">
+                    {msg.examTip && (
+                      <div className="rounded-2xl border border-amber-300/60 bg-amber-50/80 dark:bg-amber-950/20 px-4 py-3 text-sm shadow-sm">
+                        <div className="mb-1.5 flex items-center gap-2 text-amber-800 dark:text-amber-300 font-semibold">
+                          <Lightbulb className="h-4 w-4" />
+                          Exam tip
+                        </div>
+                        <DoubtsMarkdown variant="assistant" content={msg.examTip} />
+                      </div>
+                    )}
+                    {msg.realLifeExample && (
+                      <div className="rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm shadow-sm">
+                        <div className="mb-1.5 flex items-center gap-2 text-primary font-semibold">
+                          <Sparkles className="h-4 w-4" />
+                          Real-life example
+                        </div>
+                        <DoubtsMarkdown variant="assistant" content={msg.realLifeExample} />
+                      </div>
+                    )}
+                  </div>
                 </DoubtsErrorBoundary>
               )}
               {msg.role === "assistant" &&

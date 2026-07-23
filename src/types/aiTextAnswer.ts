@@ -43,6 +43,10 @@ export interface AITextAnswerData {
   key_points?: string[];
   sources?: AITextAnswerSource[];
   is_doc_grounded?: boolean;
+  exam_tip?: string;
+  quick_tip?: string;
+  real_life_example?: string;
+  example?: string;
   slide_preview?: SlidePreview | null;
   suggestions?: AITextAnswerSuggestion[];
 }
