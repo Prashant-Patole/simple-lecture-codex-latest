@@ -29,7 +29,7 @@ const HomepageFAQSection = lazyWithRetry(() => import("@/components/HomepageFAQS
 const TrustCredibilitySection = lazyWithRetry(() => import("@/components/TrustCredibilitySection").then(m => ({ default: m.TrustCredibilitySection })));
 
 const SEO_TITLE = "Online Classes for NEET, JEE & Board Exams | SimpleLecture";
-const SEO_DESCRIPTION = "India's AI-powered online learning platform. Live classes, recorded video lectures, mock tests & 24/7 AI doubt solver for NEET, JEE, CBSE Class 11-12, SSLC & PUC. Join 1,00,000+ students from ₹1000/year.";
+const SEO_DESCRIPTION = "India's AI-powered online learning platform. Live classes, recorded video lectures, mock tests & 24/7 AI doubt solver for NEET, JEE, CBSE Class 11-12, SSLC & PUC. Join 1,00,000+ students from ₹1000 + GST per course for 1-year access.";
 const SEO_KEYWORDS = "online classes, online lectures, online coaching, online learning platform India, NEET online coaching, JEE Main online classes, JEE Advanced preparation, CBSE Class 12 online classes, CBSE Class 11 online classes, physics online classes, chemistry online lectures, maths online tuition, biology online classes, science test series, mock test series, AI tutor for students, live classes, recorded lectures, video lectures, board exam preparation, JEE Main 2026, NEET 2026, SSLC, PUC, doubt solving app";
 
 const Index = () => {
