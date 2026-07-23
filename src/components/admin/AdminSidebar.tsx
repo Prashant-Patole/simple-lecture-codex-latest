@@ -116,7 +116,6 @@ export const AdminSidebar = () => {
         </NavLink>
         )}
 
-        {!isRestrictedAdmin && (
         <NavLink
           to="/admin/ask-ai"
           className={({ isActive }) =>
@@ -131,7 +130,6 @@ export const AdminSidebar = () => {
           <Sparkles className="h-4 w-4" />
           <span>Ask AI</span>
         </NavLink>
-        )}
 
 
         {/* Dashboard */}
