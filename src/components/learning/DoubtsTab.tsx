@@ -288,12 +288,12 @@ export const DoubtsTab = ({
     }
   }, []);
 
-  // Auto-scroll to bottom
+  // Auto-scroll only when chat content changes, not on every input re-render.
   useEffect(() => {
     requestAnimationFrame(() => {
       messagesEndRef.current?.scrollIntoView({ block: "end" });
     });
-  }, [messages, isLoading]);
+  }, [messages.length, isLoading]);
 
   const toggleMic = () => {
     if (isListening) {
