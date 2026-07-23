@@ -13,8 +13,10 @@ export const SlidePreviewPlayer = ({ preview }: Props) => {
 
   const [idx, setIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const playingRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fallbackTimerRef = useRef<number | null>(null);
+  const pendingSeekRef = useRef<{ time: number; play: boolean } | null>(null);
 
   const total = slides.length;
   const current = slides[idx];
@@ -22,36 +24,59 @@ export const SlidePreviewPlayer = ({ preview }: Props) => {
   const imgUrl =
     images[String(idx)]?.url || current?.infographicUrl || "";
 
+  const getSlideDuration = (slideIndex: number) =>
+    audioList[slideIndex]?.duration || slides[slideIndex]?.duration || 6;
+
   const totalDuration =
     preview.total_duration_seconds ||
-    audioList.reduce((a, b) => a + (b?.duration || 0), 0);
+    slides.reduce((sum, _slide, slideIndex) => sum + getSlideDuration(slideIndex), 0);
 
   const elapsedBefore = useMemo(() => {
     let s = 0;
-    for (let i = 0; i < idx; i++) s += audioList[i]?.duration || 0;
+    for (let i = 0; i < idx; i++) s += getSlideDuration(i);
     return s;
-  }, [idx, audioList]);
+  }, [idx, audioList, slides]);
 
   const [curTime, setCurTime] = useState(0);
   const progressPct = totalDuration
     ? Math.min(100, ((elapsedBefore + curTime) / totalDuration) * 100)
     : 0;
 
+  useEffect(() => {
+    playingRef.current = playing;
+  }, [playing]);
+
   // Load new source when slide changes
   useEffect(() => {
-    setCurTime(0);
+    const pendingSeek = pendingSeekRef.current;
+    pendingSeekRef.current = null;
+    const startAt = Math.max(0, pendingSeek?.time ?? 0);
+    setCurTime(startAt);
     const a = audioRef.current;
     if (a && audioUrl) {
       try {
         a.src = audioUrl;
         a.load();
-        if (playing) a.play().catch(() => setPlaying(false));
+        const applySeekAndPlay = () => {
+          try {
+            a.currentTime = Math.min(startAt, Number.isFinite(a.duration) ? a.duration : startAt);
+          } catch {}
+          if (playingRef.current || pendingSeek?.play) {
+            a.play().catch(() => setPlaying(false));
+          }
+        };
+        if (a.readyState >= 1) {
+          applySeekAndPlay();
+        } else {
+          a.addEventListener("loadedmetadata", applySeekAndPlay, { once: true });
+        }
       } catch {}
     }
     // Fallback auto-advance if no audio for this slide
-    if (!audioUrl && playing) {
+    if (!audioUrl && (playingRef.current || pendingSeek?.play)) {
       clearFallback();
-      fallbackTimerRef.current = window.setTimeout(() => advance(), 6000);
+      const remainingMs = Math.max(500, (getSlideDuration(idx) - startAt) * 1000);
+      fallbackTimerRef.current = window.setTimeout(() => advance(), remainingMs);
     }
     return clearFallback;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -75,8 +100,11 @@ export const SlidePreviewPlayer = ({ preview }: Props) => {
   }
 
   function advance() {
-    setIdx((i) => (i + 1 < total ? i + 1 : i));
-    if (idx + 1 >= total) setPlaying(false);
+    setIdx((i) => {
+      if (i + 1 < total) return i + 1;
+      setPlaying(false);
+      return i;
+    });
   }
 
   function togglePlay() {
@@ -100,6 +128,52 @@ export const SlidePreviewPlayer = ({ preview }: Props) => {
   function goNext() {
     clearFallback();
     setIdx((i) => Math.min(total - 1, i + 1));
+  }
+
+  function seekToProgress(nextProgress: number) {
+    if (!totalDuration) return;
+    const targetTime = Math.max(0, Math.min(totalDuration, (nextProgress / 100) * totalDuration));
+    let accumulated = 0;
+    let targetIdx = total - 1;
+    let timeWithinSlide = 0;
+
+    for (let i = 0; i < total; i++) {
+      const duration = getSlideDuration(i);
+      if (targetTime <= accumulated + duration || i === total - 1) {
+        targetIdx = i;
+        timeWithinSlide = Math.max(0, targetTime - accumulated);
+        break;
+      }
+      accumulated += duration;
+    }
+
+    clearFallback();
+    setCurTime(timeWithinSlide);
+    pendingSeekRef.current = { time: timeWithinSlide, play: playingRef.current };
+
+    if (targetIdx === idx) {
+      pendingSeekRef.current = null;
+      const a = audioRef.current;
+      if (a && audioUrl) {
+        try {
+          a.currentTime = Math.min(timeWithinSlide, Number.isFinite(a.duration) ? a.duration : timeWithinSlide);
+          if (playingRef.current) a.play().catch(() => setPlaying(false));
+        } catch {}
+      } else if (playingRef.current) {
+        const remainingMs = Math.max(500, (getSlideDuration(idx) - timeWithinSlide) * 1000);
+        fallbackTimerRef.current = window.setTimeout(() => advance(), remainingMs);
+      }
+      return;
+    }
+
+    setIdx(targetIdx);
+  }
+
+  function formatTime(seconds: number) {
+    const safeSeconds = Math.max(0, Math.floor(seconds || 0));
+    const minutes = Math.floor(safeSeconds / 60);
+    const secs = safeSeconds % 60;
+    return `${minutes}:${String(secs).padStart(2, "0")}`;
   }
 
   if (!total) return null;
@@ -141,9 +215,9 @@ export const SlidePreviewPlayer = ({ preview }: Props) => {
         {current?.title && (
           <h4 className="text-sm font-semibold">{current.title}</h4>
         )}
-        {current?.bullet_points?.length ? (
+        {(current?.bullet_points?.length || current?.keyPoints?.length) ? (
           <ul className="text-xs space-y-1 list-disc pl-4">
-            {current.bullet_points.map((b, i) => (
+            {(current.bullet_points || current.keyPoints || []).map((b, i) => (
               <li key={i}>{b}</li>
             ))}
           </ul>
@@ -151,11 +225,19 @@ export const SlidePreviewPlayer = ({ preview }: Props) => {
       </div>
 
       <div className="px-3 pb-3 space-y-2">
-        <div className="h-1 rounded-full bg-muted overflow-hidden">
-          <div
-            className="h-full bg-primary transition-all"
-            style={{ width: `${progressPct}%` }}
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+          <span className="tabular-nums">{formatTime(elapsedBefore + curTime)}</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={0.1}
+            value={progressPct}
+            onChange={(e) => seekToProgress(Number(e.target.value))}
+            className="h-2 flex-1 cursor-pointer accent-primary"
+            aria-label="Seek related lecture"
           />
+          <span className="tabular-nums">{formatTime(totalDuration)}</span>
         </div>
         <div className="flex items-center justify-between">
           <button

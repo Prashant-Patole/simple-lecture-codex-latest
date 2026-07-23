@@ -13,8 +13,11 @@ export interface SlideAudioUrl {
 
 export interface PresentationSlide {
   title: string;
-  bullet_points: string[];
+  bullet_points?: string[];
+  keyPoints?: string[];
+  duration?: number;
   infographicUrl?: string;
+  manimVideoUrl?: string;
 }
 
 export interface SlidePreview {
