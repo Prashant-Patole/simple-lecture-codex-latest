@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX idx_profiles_phone_unique ON profiles(phone_number) WHERE phone_number IS NOT NULL;

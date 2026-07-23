@@ -1,0 +1,1 @@
+UPDATE courses SET rating = 4.5;

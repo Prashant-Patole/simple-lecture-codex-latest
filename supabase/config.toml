@@ -1,0 +1,340 @@
+project_id = "oxwhqvsoelqqsblmqkxx"
+
+[functions.coverage-analyzer-proxy]
+verify_jwt = false
+
+[functions.kannada-queue-worker]
+verify_jwt = false
+
+
+[functions.public-topic-content]
+verify_jwt = false
+
+
+[functions.reconcile-video-jobs]
+verify_jwt = false
+
+
+[functions.seo-head]
+verify_jwt = false
+
+
+[functions.homepage-data]
+verify_jwt = false
+
+[functions.analyze-document-structure]
+verify_jwt = true
+
+[functions.extract-dpp-questions]
+verify_jwt = true
+
+[functions.extract-dpp-page]
+verify_jwt = true
+
+[functions.extract-dpp-answers]
+verify_jwt = true
+
+[functions.ai-compare-math-answers]
+verify_jwt = true
+
+[functions.ai-generate-dpp]
+verify_jwt = true
+
+[functions.ai-support-assistant]
+verify_jwt = false
+
+[functions.b2-upload]
+verify_jwt = true
+
+[functions.b2-large-upload]
+verify_jwt = true
+
+[functions.b2-list-files]
+verify_jwt = true
+
+[functions.b2-delete-file]
+verify_jwt = true
+
+[functions.b2-get-download-url]
+verify_jwt = true
+
+[functions.b2-proxy-file]
+verify_jwt = false
+
+[functions.ai-suggest-chapter-topic]
+verify_jwt = false
+
+[functions.bulk-auto-assign-chapters]
+verify_jwt = true
+
+[functions.send-verification-notification]
+verify_jwt = true
+
+[functions.export-verification-report]
+verify_jwt = true
+
+[functions.ai-generate-solution]
+verify_jwt = true
+
+[functions.llm-verify-single-question]
+verify_jwt = true
+
+[functions.ai-doubt-clear]
+verify_jwt = true
+
+[functions.ai-generate-mcqs]
+verify_jwt = true
+
+[functions.ai-tutor-chat]
+verify_jwt = true
+
+[functions.ai-rephrase]
+verify_jwt = true
+
+[functions.ai-generate-video]
+verify_jwt = true
+
+[functions.ai-generate-podcast]
+verify_jwt = true
+
+[functions.ai-generate-image]
+verify_jwt = true
+
+[functions.create-instructor]
+verify_jwt = false
+
+[functions.create-payment-order]
+verify_jwt = false
+
+[functions.validate-promo-code]
+verify_jwt = false
+
+[functions.ai-generate-course-content]
+verify_jwt = true
+
+[functions.ai-generate-faqs]
+verify_jwt = false
+
+[functions.api]
+verify_jwt = false
+
+[functions.generate-seed-images]
+verify_jwt = false
+
+[functions.process-educational-pdfs]
+verify_jwt = true
+
+[functions.extract-questions-from-document]
+verify_jwt = true
+
+[functions.approve-and-transfer-questions]
+verify_jwt = true
+
+[functions.retry-failed-job]
+verify_jwt = true
+
+[functions.process-llm-extraction]
+verify_jwt = false
+
+[functions.llm-verify-questions]
+verify_jwt = true
+
+[functions.update-instructor-password]
+verify_jwt = true
+
+[functions.voice-to-text]
+verify_jwt = true
+
+[functions.ai-generate-curriculum]
+verify_jwt = true
+
+[functions.check-replit-job-status]
+verify_jwt = false
+
+[functions.ai-generate-topic-content]
+verify_jwt = true
+
+[functions.ai-sales-assistant]
+verify_jwt = false
+
+[functions.google-tts]
+verify_jwt = false
+
+[functions.ai-teaching-assistant]
+verify_jwt = true
+
+[functions.ai-teaching-proxy]
+verify_jwt = false
+
+[functions.save-presentation-audio]
+verify_jwt = false
+
+[functions.generate-story-video]
+verify_jwt = true
+
+[functions.sarvam-tts]
+verify_jwt = false
+
+[functions.parse-pdf-to-json]
+verify_jwt = true
+
+[functions.extract-json-to-questions]
+verify_jwt = true
+
+[functions.send-class-reminders]
+verify_jwt = false
+
+[functions.bbb-api]
+verify_jwt = true
+
+[functions.bbb-webhooks]
+verify_jwt = false
+
+[functions.transfer-recording]
+verify_jwt = false
+
+[functions.streaming-api]
+verify_jwt = true
+
+[functions.offline-download-api]
+verify_jwt = true
+
+[functions.forum-ai-reply]
+verify_jwt = true
+
+[functions.extract-questions-preview]
+verify_jwt = true
+
+[functions.extract-answer-from-image]
+verify_jwt = true
+
+[functions.bharat-tts]
+verify_jwt = false
+
+[functions.translate-text]
+verify_jwt = true
+
+[functions.indic-parler-tts]
+verify_jwt = false
+
+[functions.ai-generate-assignment]
+verify_jwt = true
+
+[functions.ai-grade-assignment]
+verify_jwt = true
+
+[functions.search-users-by-email]
+verify_jwt = false
+
+[functions.test-ai-connection]
+verify_jwt = true
+
+[functions.video-generation-proxy]
+verify_jwt = false
+
+[functions.create-topup-order]
+verify_jwt = false
+
+[functions.verify-topup-payment]
+verify_jwt = false
+
+[functions.record-daily-attendance]
+verify_jwt = false
+
+[functions.migrate-course-thumbnails]
+verify_jwt = false
+
+[functions.send-password-reset-otp]
+verify_jwt = false
+
+[functions.verify-password-reset-otp]
+verify_jwt = false
+
+[functions.reset-password-with-token]
+verify_jwt = false
+
+[functions.ai-check-answer]
+verify_jwt = true
+
+[functions.kie-ai-common]
+verify_jwt = false
+
+[functions.auto-pipeline-worker]
+verify_jwt = false
+
+[functions.auto-pipeline-scanner]
+verify_jwt = false
+
+[functions.send-phone-otp]
+verify_jwt = false
+
+[functions.verify-phone-otp]
+verify_jwt = false
+
+[functions.send-email-otp]
+verify_jwt = false
+
+[functions.verify-email-otp]
+verify_jwt = false
+
+[functions.language-generation-worker]
+verify_jwt = false
+
+[functions.send-daily-motivation-email]
+verify_jwt = false
+
+[functions.send-welcome-email]
+verify_jwt = false
+
+[functions.send-purchase-reminder-email]
+verify_jwt = false
+
+[functions.presentation-update-worker]
+verify_jwt = false
+[functions.recover-pending-payments]
+verify_jwt = false
+
+[functions.ai-doubts-chat]
+verify_jwt = false
+
+[functions.extract-pyq-questions]
+verify_jwt = true
+
+[functions.dynamic-sitemap]
+verify_jwt = false
+
+[functions.razorpay-webhook]
+verify_jwt = false
+
+[functions.generate-blog-post]
+verify_jwt = false
+
+[functions.admin-delete-user]
+verify_jwt = false
+
+[functions.whatsapp-daily-nudge]
+verify_jwt = false
+
+[functions.whatsapp-doubt-webhook]
+verify_jwt = false
+
+[functions.v3-player-proxy]
+verify_jwt = false
+
+[functions.study-timetable-ai]
+verify_jwt = true
+
+[functions.send-timetable-reminders]
+verify_jwt = false
+
+[functions.split-document-by-subtopic]
+verify_jwt = false
+
+[functions.split-document-to-docx]
+verify_jwt = false
+
+[functions.auto-submission-tick]
+verify_jwt = false
+
+[functions.v4-player-proxy]
+verify_jwt = false

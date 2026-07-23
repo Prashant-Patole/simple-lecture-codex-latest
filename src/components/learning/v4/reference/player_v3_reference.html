@@ -1,0 +1,3884 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>V3 Player</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=JetBrains+Mono:wght@400;600&family=Sora:wght@300;400;500;600;700&display=swap');
+
+        :root {
+            --bg: #0d1117;
+            --surf: #161b22;
+            --surf2: #21262d;
+            --border: rgba(255, 255, 255, 0.07);
+            --w: #e6edf3;
+            --dim: rgba(230, 237, 243, 0.42);
+            --gold: #f6c44e;
+            --amber: #ff9f43;
+            --teal: #00d2b4;
+            --rose: #ff6b8a;
+            --sky: #79c0ff;
+            --lav: #b8a9ff;
+            --grn: #7ee787;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0
+        }
+
+        html,
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: var(--bg);
+            color: var(--w);
+            font-family: 'Sora', sans-serif
+        }
+
+        /* ── LAYOUT ── */
+        #app {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column
+        }
+
+        #topbar {
+            height: 48px;
+            background: rgba(10, 14, 20, .97);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 12px;
+            flex-shrink: 0;
+            z-index: 20;
+            display: none
+        }
+
+        #main {
+            position: absolute;
+            top: 48px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            overflow: hidden
+        }
+
+        /* Desktop: 70/30 split — content left, avatar strip on right */
+        @media (min-width: 641px) {
+            #main {
+                margin-right: 30vw;
+            }
+        }
+
+        #botbar {
+            height: 60px;
+            background: rgba(8, 12, 18, .85);
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 18px;
+            gap: 12px;
+            flex-shrink: 0;
+            z-index: 70;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            display: none
+        }
+
+        /* ── TOPBAR ── */
+        .tb-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px;
+            letter-spacing: .14em;
+            padding: 3px 8px;
+            border-radius: 4px;
+            text-transform: uppercase
+        }
+
+        .tb-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--w)
+        }
+
+        .tb-sec-name {
+            font-size: 14px;
+            color: var(--dim);
+            margin-left: 4px
+        }
+
+        .tb-dots {
+            display: flex;
+            gap: 5px;
+            margin-left: auto;
+            align-items: center
+        }
+
+        .tb-dot {
+            height: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all .35s;
+            background: rgba(255, 255, 255, .1)
+        }
+
+        .tb-dot.past {
+            background: rgba(246, 196, 78, .35);
+            width: 16px
+        }
+
+        .tb-dot.cur {
+            background: var(--gold);
+            width: 28px
+        }
+
+        .tb-dot.future {
+            width: 16px
+        }
+
+        /* ── BADGE COLOURS ── */
+        .badge-intro {
+            background: rgba(246, 196, 78, .15);
+            color: var(--gold);
+            border: 1px solid rgba(246, 196, 78, .25)
+        }
+
+        .badge-summary {
+            background: rgba(121, 192, 255, .12);
+            color: var(--sky);
+            border: 1px solid rgba(121, 192, 255, .2)
+        }
+
+        .badge-content {
+            background: rgba(0, 210, 180, .12);
+            color: var(--teal);
+            border: 1px solid rgba(0, 210, 180, .2)
+        }
+
+        .badge-example {
+            background: rgba(184, 169, 255, .12);
+            color: var(--lav);
+            border: 1px solid rgba(184, 169, 255, .2)
+        }
+
+        .badge-memory {
+            background: rgba(255, 107, 138, .12);
+            color: var(--rose);
+            border: 1px solid rgba(255, 107, 138, .2)
+        }
+
+        .badge-recap {
+            background: rgba(126, 231, 135, .12);
+            color: var(--grn);
+            border: 1px solid rgba(126, 231, 135, .2)
+        }
+
+        .badge-quiz {
+            background: rgba(255, 107, 138, .12);
+            color: var(--rose);
+            border: 1px solid rgba(255, 107, 138, .2)
+        }
+
+        /* Base layers — no inset:0, use explicit positions with gap */
+        #wan-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            display: none;
+            background: #000;
+            overflow: hidden;
+            border: none;
+            border-radius: 0;
+        }
+
+        #wan-layer.on {
+            display: block;
+        }
+
+        #manim-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            display: none;
+            background: #000;
+            overflow: hidden;
+            border: none;
+            border-radius: 0;
+        }
+
+        #manim-layer.on {
+            display: block;
+            z-index: 4;
+        }
+
+        #image-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 5;
+            display: none;
+            background: #0d1117;
+            overflow: hidden;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            border: none;
+            border-radius: 0;
+        }
+
+        #image-layer.on {
+            display: block;
+        }
+
+        #image-layer.vis {
+            opacity: 1;
+        }
+
+        #wan-vid,
+        #manim-vid {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
+            border: none;
+            border-radius: 0;
+            display: block;
+            background: #000;
+        }
+
+        #image-display {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            object-position: center;
+            border: none;
+            border-radius: 0;
+            display: block;
+            background: #0d1117;
+        }
+
+        /* ── MOBILE — small screen general fixes (both orientations) ── */
+        @media (max-width: 640px) {
+
+            #quiz-question-card {
+                padding: 16px 14px !important;
+            }
+
+            #quiz-q-text {
+                font-size: 17px !important;
+            }
+
+            #quiz-options {
+                grid-template-columns: 1fr !important;
+            }
+
+            #botbar {
+                height: 64px !important;
+                padding: 0 10px !important;
+                gap: 8px !important;
+            }
+
+            .nb {
+                width: 44px !important;
+                height: 44px !important;
+                font-size: 16px !important;
+                flex-shrink: 0 !important;
+            }
+
+            .pb {
+                width: 48px !important;
+                height: 48px !important;
+                font-size: 18px !important;
+                flex-shrink: 0 !important;
+            }
+
+            #bot-badge {
+                display: none !important;
+            }
+
+            #bot-label {
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 120px;
+                font-size: 10px;
+            }
+
+            #topbar {
+                padding: 0 10px !important;
+                gap: 8px !important;
+            }
+
+            .tb-title {
+                font-size: 13px !important;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 120px;
+            }
+
+            .tb-sec-name {
+                display: none !important;
+            }
+
+            .tb-dots {
+                flex-wrap: nowrap;
+                overflow: hidden;
+                max-width: 80px;
+            }
+
+            .tb-dot.past,
+            .tb-dot.future {
+                width: 10px !important;
+            }
+
+            .tb-dot.cur {
+                width: 18px !important;
+            }
+        }
+
+        /* ── MOBILE LANDSCAPE ONLY — avatar sizing ── */
+        @media (max-width: 640px) and (orientation: landscape) {
+            #av-overlay[data-sectype="intro"] {
+                height: 58vh !important;
+                bottom: 66px !important;
+            }
+
+            #av-overlay:not([data-sectype="intro"]) {
+                height: 40vh !important;
+                bottom: 68px !important;
+                right: -10vw !important;
+                /* keep person flush-right on mobile landscape */
+            }
+        }
+
+        @media (max-width: 400px) and (orientation: landscape) {
+            #av-overlay:not([data-sectype="intro"]) {
+                height: 32vh !important;
+                right: -8vw !important;
+            }
+        }
+
+        /* ── LANDSCAPE FULLSCREEN — FIXED ────────────────────────────── */
+        @media (orientation: landscape) and (max-height: 480px) {
+
+            #topbar,
+            #gesture-hud,
+            #interaction-hint {
+                display: none !important;
+            }
+
+            #app {
+                display: block !important;
+                height: 100dvh !important;
+                overflow: hidden !important;
+            }
+
+            /* Botbar: fixed strip at bottom */
+            #botbar {
+                display: flex !important;
+                position: fixed !important;
+                bottom: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                height: 52px !important;
+                padding: 0 12px !important;
+                gap: 10px !important;
+                background: rgba(8, 12, 18, 0.97) !important;
+                border-top: 1px solid rgba(255, 255, 255, 0.07) !important;
+                z-index: 100 !important;
+            }
+
+            /* Intro: avatar centred, video fills full width */
+            #av-overlay[data-sectype="intro"] {
+                display: block !important;
+                position: fixed !important;
+                bottom: 52px !important;
+                left: 50% !important;
+                right: auto !important;
+                top: auto !important;
+                transform: translateX(-50%) !important;
+                height: 90dvh !important;
+                width: auto !important;
+                z-index: 50 !important;
+            }
+
+            /* Non-intro: avatar as right side strip — widened so transparent half goes off-screen */
+            #av-overlay:not([data-sectype="intro"]) {
+                display: block !important;
+                position: fixed !important;
+                top: 0 !important;
+                bottom: 52px !important;
+                right: -15vw !important;
+                /* push transparent right side off-screen */
+                left: auto !important;
+                width: 50vw !important;
+                /* wider so person lands in visible strip */
+                height: auto !important;
+                transform: none !important;
+                z-index: 50 !important;
+            }
+
+            /* Main: fills left area, avatar strip on right */
+            #main {
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                right: var(--av-strip-w, 28vw) !important;
+                bottom: 52px !important;
+                width: auto !important;
+                height: auto !important;
+                z-index: 10 !important;
+                background: #0d1117 !important;
+            }
+
+            #wan-layer.on,
+            #manim-layer.on,
+            #image-layer.on {
+                display: block !important;
+            }
+
+            /* Subtitles: within video area, clears avatar strip */
+            #subtitle-overlay {
+                display: block !important;
+                position: fixed !important;
+                bottom: 58px !important;
+                left: 10px !important;
+                right: calc(var(--av-strip-w, 28vw) + 8px) !important;
+                transform: none !important;
+                width: auto !important;
+                text-align: left !important;
+                z-index: 65 !important;
+            }
+
+            .sub-word,
+            .subtitle-text {
+                font-size: 13px !important;
+                line-height: 1.4 !important;
+            }
+
+            .nb {
+                width: 36px !important;
+                height: 36px !important;
+            }
+
+            .pb {
+                width: 40px !important;
+                height: 40px !important;
+            }
+
+            #bot-label {
+                font-size: 10px !important;
+                max-width: 80px !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+            }
+
+            #quiz-overlay {
+                z-index: 10000 !important;
+                padding: 8px 12px !important;
+                overflow-y: auto !important;
+            }
+
+            #quiz-options {
+                grid-template-columns: 1fr 1fr !important;
+            }
+
+            #tap-to-start {
+                z-index: 10001 !important;
+            }
+        }
+
+        /* ── SUBTITLE OVERLAY ───────────────────────────────────────── */
+        #subtitle-overlay {
+            position: fixed;
+            bottom: 70px;
+            left: 12px;
+            right: calc(30vw + 10px);
+            /* clears 30vw avatar strip + 10px gap */
+            transform: none;
+            width: auto;
+            max-width: none;
+            text-align: center;
+            pointer-events: none;
+            z-index: 65;
+            display: none;
+            padding: 5px 10px;
+            background: rgba(0, 0, 0, 0.55);
+            border-radius: 8px;
+            overflow: visible;
+            max-height: none;
+        }
+
+        /* Mobile portrait — wider box, clears the 64px bottom bar */
+        @media (max-width: 640px) {
+            #subtitle-overlay {
+                left: 8px !important;
+                right: 8px !important;
+                bottom: 74px;
+                padding: 5px 10px;
+                overflow: visible !important;
+                max-height: none !important;
+            }
+
+            .sub-word,
+            .subtitle-text {
+                font-size: 14px !important;
+                line-height: 1.55 !important;
+            }
+        }
+
+        @media (max-width: 400px) {
+            #subtitle-overlay {
+                width: 98%;
+                bottom: 72px;
+            }
+
+            .sub-word,
+            .subtitle-text {
+                font-size: 12px !important;
+            }
+        }
+
+        /* ── UPDATED SUBTITLE CSS ── */
+        .sub-word {
+            display: inline;
+            font-size: 20px;
+            font-weight: 600;
+            line-height: 1.6;
+            padding: 0 2px;
+            transition: color 0.1s, text-shadow 0.1s;
+            color: rgba(255, 255, 255, 0.4);
+            text-shadow:
+                0 0 8px rgba(0, 0, 0, 1),
+                1px 1px 3px rgba(0, 0, 0, 1);
+        }
+
+        .sub-word.spoken {
+            display: inline;
+            color: #e6edf3;
+        }
+
+        .sub-word.active {
+            display: inline;
+            color: var(--gold);
+            text-shadow:
+                0 0 12px rgba(246, 196, 78, 0.6),
+                0 0 8px rgba(0, 0, 0, 1),
+                1px 1px 3px rgba(0, 0, 0, 1);
+        }
+
+        .sub-word.future {
+            display: inline;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .scene {
+            position: absolute;
+            inset: 0;
+            z-index: 3;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .55s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 28px;
+            gap: 18px
+        }
+
+        .scene.on {
+            opacity: 1;
+            pointer-events: all
+        }
+
+        .subtitle-text {
+            display: inline-block;
+            background: transparent;
+            color: #fff;
+            font-size: 20px;
+            line-height: 1.6;
+            font-weight: 600;
+            text-shadow:
+                0 0 8px rgba(0, 0, 0, 1),
+                0 0 16px rgba(0, 0, 0, 0.9),
+                1px 1px 3px rgba(0, 0, 0, 1),
+                -1px -1px 3px rgba(0, 0, 0, 1);
+        }
+
+        #loading-screen {
+            position: absolute;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            background: var(--bg)
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(246, 196, 78, .2);
+            border-top-color: var(--gold);
+            border-radius: 50%;
+            animation: spin .8s linear infinite
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg)
+            }
+        }
+
+        .loading-text {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--dim);
+            letter-spacing: .08em
+        }
+
+        #error-screen {
+            position: absolute;
+            inset: 0;
+            z-index: 100;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            background: var(--bg)
+        }
+
+        .error-icon {
+            font-size: 48px
+        }
+
+        .error-msg {
+            font-size: 14px;
+            color: var(--rose);
+            text-align: center;
+            max-width: 400px;
+            line-height: 1.6
+        }
+
+        /* ── SCENES ── */
+        .intro-icon {
+            font-size: 56px;
+            animation: floatPulse 3s ease infinite
+        }
+
+        @keyframes floatPulse {
+
+            0%,
+            100% {
+                transform: translateY(0) scale(1)
+            }
+
+            50% {
+                transform: translateY(-8px) scale(1.05)
+            }
+        }
+
+        .intro-title {
+            font-family: 'Caveat', cursive;
+            font-size: 64px;
+            font-weight: 700;
+            color: var(--gold);
+            margin-bottom: 24px;
+            text-align: center;
+            line-height: 1.1;
+            background: linear-gradient(135deg, var(--gold) 0%, var(--amber) 40%, var(--sky) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: riseIn .8s .2s both
+        }
+
+        .intro-sub {
+            font-size: 15px;
+            color: var(--dim);
+            text-align: center;
+            max-width: 500px;
+            line-height: 1.6;
+            animation: riseIn .8s .5s both
+        }
+
+        .intro-chips {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+            animation: riseIn .8s .8s both
+        }
+
+        .chip {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            border: 1px solid
+        }
+
+        @keyframes riseIn {
+            from {
+                opacity: 0;
+                transform: translateY(18px)
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0)
+            }
+        }
+
+        .sum-hd {
+            font-family: 'Caveat', cursive;
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--gold);
+            width: 100%
+        }
+
+        .sbullet {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 18px;
+            border-radius: 12px;
+            background: var(--surf);
+            border: 1px solid var(--border);
+            width: 100%;
+            opacity: 0;
+            transform: translateX(-16px);
+            transition: all .5s
+        }
+
+        .sbullet.show {
+            opacity: 1;
+            transform: translateX(0)
+        }
+
+        .sbullet-n {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--gold), var(--amber));
+            color: #120d00;
+            font-weight: 700;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0
+        }
+
+        .sbullet-t {
+            font-size: 18px;
+            color: #e6edf3;
+            line-height: 1.5;
+            font-weight: 500
+        }
+
+        .mem-hd {
+            font-family: 'Caveat', cursive;
+            font-size: 28px;
+            color: var(--rose)
+        }
+
+        .card-scene {
+            perspective: 800px;
+            width: 100%;
+            max-width: 460px
+        }
+
+        .card-3d {
+            width: 100%;
+            height: 200px;
+            transform-style: preserve-3d;
+            transition: transform .55s cubic-bezier(.4, 0, .2, 1);
+            cursor: pointer;
+            position: relative
+        }
+
+        .card-3d.flipped {
+            transform: rotateY(180deg)
+        }
+
+        .card-face {
+            position: absolute;
+            inset: 0;
+            backface-visibility: hidden;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            text-align: center
+        }
+
+        .card-front {
+            background: linear-gradient(135deg, var(--surf) 0%, var(--surf2) 100%);
+            border: 1px solid var(--border)
+        }
+
+        .card-back {
+            background: linear-gradient(135deg, rgba(255, 107, 138, .12), rgba(0, 210, 180, .08));
+            border: 1px solid rgba(255, 107, 138, .2);
+            transform: rotateY(180deg)
+        }
+
+        .card-q {
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--w);
+            line-height: 1.5
+        }
+
+        .card-hint {
+            font-size: 11px;
+            color: var(--dim);
+            margin-top: 12px
+        }
+
+        .card-a {
+            font-size: 16px;
+            color: var(--w);
+            line-height: 1.6
+        }
+
+        .card-nav {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            margin-top: 12px
+        }
+
+        .card-pips {
+            display: flex;
+            gap: 6px
+        }
+
+        .cpip {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, .15);
+            cursor: pointer;
+            transition: all .25s
+        }
+
+        .cpip.on {
+            background: var(--rose);
+            transform: scale(1.3)
+        }
+
+        .cpip.done {
+            background: rgba(255, 255, 255, .4)
+        }
+
+        .card-ctr {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            color: var(--dim);
+            text-align: center
+        }
+
+        .quiz-card {
+            background: var(--surf);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            width: 100%;
+            max-width: 540px
+        }
+
+        .quiz-q {
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--w);
+            margin-bottom: 20px;
+            line-height: 1.5;
+            text-align: center
+        }
+
+        .quiz-opts {
+            display: flex;
+            flex-direction: column;
+            gap: 10px
+        }
+
+        .quiz-opt {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 18px;
+            border-radius: 10px;
+            background: var(--surf2);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: all .25s
+        }
+
+        .quiz-opt:hover {
+            border-color: var(--sky);
+            background: rgba(121, 192, 255, .08)
+        }
+
+        .quiz-opt.correct {
+            border-color: var(--grn) !important;
+            background: rgba(126, 231, 135, .12) !important
+        }
+
+        .quiz-opt.wrong {
+            border-color: var(--rose) !important;
+            background: rgba(255, 107, 138, .08) !important
+        }
+
+        .quiz-opt-lbl {
+            width: 28px;
+            height: 28px;
+            border-radius: 7px;
+            background: rgba(255, 255, 255, .06);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0
+        }
+
+        .quiz-explanation {
+            font-size: 13px;
+            color: var(--dim);
+            line-height: 1.6;
+            text-align: center;
+            margin-top: 16px;
+            opacity: 0;
+            transition: opacity .4s
+        }
+
+        .quiz-explanation.show {
+            opacity: 1
+        }
+
+        /* ── AVATAR OVERLAY ── */
+        #av-overlay {
+            position: fixed;
+            z-index: 60;
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            border-radius: 0;
+            overflow: visible;
+            display: none;
+            pointer-events: none;
+            transition: height .4s, bottom .4s, left .4s, right .4s, transform .4s;
+        }
+
+        #av-overlay[data-sectype="intro"] {
+            bottom: 0;
+            left: 50%;
+            right: auto;
+            transform: translateX(-50%);
+            height: 86vh;
+            width: auto;
+        }
+
+        #av-overlay:not([data-sectype="intro"]) {
+            bottom: 60px;
+            right: -15vw;
+            /* shift right so empty transparent side goes off-screen */
+            left: auto;
+            transform: none;
+            height: 78vh;
+            width: 50vw;
+            /* wider so full video renders; person lands in visible right strip */
+        }
+
+        #av-overlay canvas {
+            background: transparent !important;
+        }
+
+        /* Avatar video/canvas: full height, auto width — overflow:hidden on overlay clips it */
+        #av-overlay video,
+        #av-overlay canvas {
+            width: auto;
+            height: 100%;
+            display: block;
+            position: absolute;
+            top: 0;
+            right: 0;
+        }
+
+        /* Clip overflow so avatar never bleeds into the 70% content area */
+        #av-overlay:not([data-sectype="intro"]) {
+            overflow: hidden;
+        }
+
+        #av-overlay .av-tag {
+            display: none !important;
+        }
+
+        #av-narr {
+            font-size: 10px;
+            line-height: 1.55;
+            color: rgba(255, 255, 255, .55);
+            padding: 8px;
+            background: rgba(0, 0, 0, .4);
+            border-top: 1px solid rgba(255, 255, 255, .08);
+            display: none
+        }
+
+        #av-overlay:hover #av-narr {
+            display: block
+        }
+
+        /* ── BOTTOM BAR ── */
+        .nb {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, .09);
+            background: rgba(255, 255, 255, .04);
+            color: var(--w);
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all .2s;
+            flex-shrink: 0
+        }
+
+        .nb:hover {
+            border-color: var(--gold);
+            color: var(--gold)
+        }
+
+        .pb {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--gold), var(--amber));
+            color: #1a1000;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            box-shadow: 0 4px 16px rgba(246, 196, 78, .25);
+            transition: all .2s
+        }
+
+        .pb:hover {
+            transform: scale(1.06)
+        }
+
+        .prog-wrap {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            min-width: 0
+        }
+
+        .prog-meta {
+            display: flex;
+            justify-content: space-between;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            color: rgba(255, 255, 255, .3)
+        }
+
+        .prog-track {
+            height: 3px;
+            background: rgba(255, 255, 255, .06);
+            border-radius: 2px;
+            overflow: hidden
+        }
+
+        .prog-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--gold), var(--amber));
+            border-radius: 2px;
+            transition: width .4s
+        }
+
+        .seg-dots {
+            display: flex;
+            gap: 5px;
+            margin-top: 2px
+        }
+
+        /* ── GESTURE HUD ── */
+        #gesture-hud {
+            position: fixed;
+            top: 58px;
+            left: 12px;
+            z-index: 60;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            pointer-events: none
+        }
+
+        #g-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, .14);
+            border: 1px solid rgba(255, 255, 255, .18);
+            transition: background .3s
+        }
+
+        #g-dot.active {
+            background: var(--teal)
+        }
+
+        #g-dot.denied {
+            background: var(--rose)
+        }
+
+        #g-lbl {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            color: var(--gold);
+            background: rgba(0, 0, .65);
+            padding: 3px 8px;
+            border-radius: 4px;
+            opacity: 0;
+            transition: opacity .25s;
+            white-space: nowrap
+        }
+
+        #g-lbl.show {
+            opacity: 1
+        }
+
+        #g-zoom {
+            font-size: 9px;
+            color: rgba(230, 237, 243, .38);
+            font-family: 'JetBrains Mono', monospace;
+            background: rgba(0, 0, 0, .4);
+            padding: 2px 6px;
+            border-radius: 3px;
+            opacity: 0;
+            transition: opacity .3s
+        }
+
+        #g-zoom.show {
+            opacity: 1
+        }
+
+        /* ── SPLIT STACK — Mobile portrait only ── */
+        @media (max-width: 640px) and (orientation: portrait) {
+
+            /* App becomes a vertical stack */
+            #app {
+                display: flex !important;
+                flex-direction: column !important;
+                height: 100dvh !important;
+                overflow: hidden !important;
+                justify-content: flex-start !important;
+            }
+
+            #topbar {
+                flex-shrink: 0 !important;
+                display: flex !important;
+            }
+
+            /* Video zone: fills remaining space, min 16:9 */
+            #main {
+                flex: 1 1 auto !important;
+                width: 100% !important;
+                min-height: 56.25vw !important;
+                height: auto !important;
+                position: relative !important;
+            }
+
+            #image-display {
+                width: 100% !important;
+                height: 100% !important;
+                object-fit: contain !important;
+            }
+
+            #wan-vid {
+                object-fit: contain !important;
+            }
+
+            /* Portrait: avatar fixed PiP over right side of video zone */
+            #av-overlay {
+                display: block !important;
+                position: fixed !important;
+                top: 46px !important;
+                bottom: auto !important;
+                right: 0 !important;
+                left: auto !important;
+                transform: none !important;
+                height: 56.25vw !important;
+                width: auto !important;
+                z-index: 60 !important;
+                pointer-events: none !important;
+            }
+
+            /* Override sectype-specific rules for portrait */
+            #av-overlay[data-sectype="intro"] {
+                display: block !important;
+                position: fixed !important;
+                left: 50% !important;
+                right: auto !important;
+                top: 46px !important;
+                bottom: auto !important;
+                transform: translateX(-50%) !important;
+                height: 70vw !important;
+                width: auto !important;
+                z-index: 60 !important;
+            }
+
+            #av-overlay:not([data-sectype="intro"]) {
+                display: block !important;
+                position: fixed !important;
+                top: 46px !important;
+                bottom: auto !important;
+                right: 0 !important;
+                left: auto !important;
+                transform: none !important;
+                height: 56.25vw !important;
+                width: auto !important;
+                z-index: 60 !important;
+            }
+
+            /* av-dock: subtitle full width */
+            #av-dock {
+                flex-shrink: 0 !important;
+                display: flex !important;
+                align-items: stretch !important;
+                min-height: 70px !important;
+                background: var(--surf) !important;
+                border-top: 1px solid var(--border) !important;
+                border-bottom: 1px solid var(--border) !important;
+                overflow: hidden !important;
+                position: relative !important;
+            }
+
+            /* Subtitle repositioned inside dock */
+            #av-dock #subtitle-overlay {
+                position: relative !important;
+                display: flex !important;
+                align-items: center !important;
+                bottom: auto !important;
+                left: auto !important;
+                right: auto !important;
+                top: auto !important;
+                transform: none !important;
+                width: auto !important;
+                max-width: none !important;
+                flex: 1 !important;
+                padding: 10px 14px !important;
+                font-size: 14px !important;
+                background: transparent !important;
+                border-radius: 0 !important;
+                text-align: left !important;
+                overflow: visible !important;
+            }
+
+            /* Botbar anchored to bottom */
+            #botbar {
+                flex-shrink: 0 !important;
+                display: flex !important;
+                margin-top: auto !important;
+            }
+
+            /* Quiz overlay: only covers below video, above botbar */
+            /* topbar=46px, video=56.25vw (16:9 of 100vw) */
+            #quiz-overlay {
+                top: calc(46px + 56.25vw) !important;
+                bottom: 60px !important;
+                left: 0 !important;
+                right: 0 !important;
+                border-radius: 0 !important;
+                overflow-y: auto !important;
+                padding: 12px 12px 12px 12px !important;
+                justify-content: flex-start !important;
+            }
+
+            /* Fix PREV/SKIP nav floating over options */
+            #quiz-nav {
+                position: fixed !important;
+                bottom: 64px !important;
+                left: 0 !important;
+                right: 0 !important;
+                padding: 8px 14px !important;
+                background: rgba(13, 17, 23, 0.97) !important;
+                border-top: 1px solid rgba(255, 255, 255, 0.07) !important;
+                z-index: 200 !important;
+                justify-content: space-between !important;
+            }
+
+            /* Give options breathing room above the fixed nav */
+            #quiz-options {
+                margin-bottom: 52px !important;
+            }
+
+            /* Question text readable size */
+            #quiz-q-text {
+                font-size: 16px !important;
+                line-height: 1.5 !important;
+            }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        (function () {
+            var s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0/dist/tf.min.js';
+            s.onload = function () {
+                var s2 = document.createElement('script');
+                s2.src = 'https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose@0.0.7/dist/handpose.min.js';
+                s2.onload = function () { window._handposeReady = true; if (window._initGestures) window._initGestures(); };
+                document.head.appendChild(s2);
+            };
+            document.head.appendChild(s);
+        })();
+    </script>
+</head>
+
+<body>
+
+
+    <div id="app">
+
+        <div id="tap-to-start" style="
+            display:none; position:fixed; inset:0; z-index:200;
+            background:rgba(13,17,23,0.92); flex-direction:column;
+            align-items:center; justify-content:center; gap:16px;
+            font-family:'Sora',sans-serif; color:#e6edf3;
+        ">
+            <div style="font-size:48px">▶️</div>
+            <div style="font-size:18px;font-weight:600">Tap to start lesson</div>
+            <div style="font-size:13px;color:rgba(230,237,243,0.5)">Audio required</div>
+        </div>
+
+        <div id="dev-overlay" style="
+            display:none; position:absolute; top:40px; left:20px; z-index:999;
+            background:rgba(13,17,23,0.95); border:1px solid rgba(255,255,255,0.08);
+            border-radius:12px; padding:20px; width:280px; box-shadow:0 8px 32px rgba(0,0,0,0.8);
+            font-family:'JetBrains Mono',monospace; font-size:12px; color:#e6edf3;
+        ">
+            <h3
+                style="margin:0 0 15px 0; font-size:14px; color:var(--gold); display:flex; justify-content:space-between;">
+                Developer Mode <span style="font-size:10px; opacity:0.5; font-weight:normal">(Shift+D)</span>
+                <label style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span>Lead ms (<span id="dev-lead-val">80</span>)</span>
+                    <input type="range" id="dev-lead" min="-300" max="300" step="10" value="80" style="width:120px">
+                </label>
+                <label style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span>Similarity (<span id="dev-sim-val">0.15</span>)</span>
+                    <input type="range" id="dev-sim" min="0" max="1" step="0.01" value="0.15" style="width:120px">
+                </label>
+                <label style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                    <span>Smoothness (<span id="dev-smo-val">0</span>)</span>
+                    <input type="range" id="dev-smo" min="0" max="1" step="0.01" value="0" style="width:120px">
+                </label>
+                <label style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span>Intro Height vh (<span id="dev-intro-val">80</span>)</span>
+                    <input type="range" id="dev-intro" min="30" max="100" step="1" value="80" style="width:120px">
+                </label>
+                <label style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                    <span>Content Height vh (<span id="dev-cont-val">78</span>)</span>
+                    <input type="range" id="dev-cont" min="20" max="100" step="1" value="78" style="width:120px">
+                </label>
+                <label style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                    <span>Manim Scale (<span id="dev-three-val">1.0</span>)</span>
+                    <input type="range" id="dev-three" min="0.5" max="2.0" step="0.1" value="1.0" style="width:120px">
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+                    <input type="checkbox" id="dev-raw"> Show Raw AV Video
+                </label>
+                <hr style="border-color:rgba(255,255,255,0.08); margin:14px 0;">
+                <div style="font-size:11px; color:var(--gold); margin-bottom:8px; letter-spacing:.05em;">SUBTITLES</div>
+                <label style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span>Font Size (<span id="dev-sub-size-val">20</span>px)</span>
+                    <input type="range" id="dev-sub-size" min="12" max="36" step="1" value="20" style="width:120px">
+                </label>
+                <label style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span>Bottom pos (<span id="dev-sub-pos-val">56</span>px)</span>
+                    <input type="range" id="dev-sub-pos" min="40" max="200" step="2" value="56" style="width:120px">
+                </label>
+                <label style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span>Width (<span id="dev-sub-width-val">70</span>%)</span>
+                    <input type="range" id="dev-sub-width" min="20" max="100" step="5" value="70" style="width:120px">
+                </label>
+                <label style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span>Mode</span>
+                    <select id="dev-sub-mode"
+                        style="background:#0d1117;color:#e6edf3;border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:2px 4px;font-size:11px;">
+                        <option value="karaoke">Karaoke (word-by-word)</option>
+                        <option value="full">Full sentence</option>
+                        <option value="off">Off</option>
+                    </select>
+                </label>
+                <hr style="border-color:rgba(255,255,255,0.08); margin:14px 0;">
+                <div style="font-size:11px; color:var(--gold); margin-bottom:8px; letter-spacing:.05em;">AVATAR POSITION
+                </div>
+                <label style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span>Right &#8592;&#8594; (<span id="dev-av-right-val">0</span>px)</span>
+                    <input type="range" id="dev-av-right" min="-300" max="1000" step="10" value="0" style="width:120px">
+                </label>
+                <label style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span>Bottom (<span id="dev-av-bottom-val">60</span>px)</span>
+                    <input type="range" id="dev-av-bottom" min="0" max="300" step="5" value="60" style="width:120px">
+                </label>
+                <label style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span>Strip W (<span id="dev-av-sw-val">28</span>vw)</span>
+                    <input type="range" id="dev-av-sw" min="10" max="50" step="1" value="28" style="width:120px">
+                </label>
+                <button id="dev-av-copy"
+                    style="margin-top:4px;background:rgba(246,196,78,0.15);color:var(--gold);border:1px solid rgba(246,196,78,0.3);border-radius:4px;padding:4px 8px;cursor:pointer;width:100%;font-family:'JetBrains Mono',monospace;font-size:11px;">Copy
+                    Avatar CSS</button>
+        </div>
+
+        <div id="loading-screen">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading lesson...</div>
+        </div>
+
+        <div id="error-screen">
+            <div class="error-icon">⚠️</div>
+            <div class="error-msg" id="error-msg">Could not load presentation.json</div>
+        </div>
+
+        <div id="video-buffering"
+            style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 80;">
+            <div class="loading-spinner"></div>
+        </div>
+
+        <div id="topbar">
+            <div class="tb-badge badge-intro" id="top-badge">INTRO</div>
+            <div class="tb-title" id="tb-title">Lesson</div>
+            <div class="tb-sec-name" id="tb-secname">/ Loading</div>
+            <div class="tb-dots" id="tb-dots"></div>
+        </div>
+
+        <div id="main">
+            <div id="wan-layer">
+                <video id="wan-vid" muted playsinline preload="auto"></video>
+                <video id="wan-vid-pre" muted playsinline preload="auto"
+                    style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;"></video>
+            </div>
+            <div id="threejs-layer"></div>
+            <div id="manim-layer">
+                <video id="manim-vid" muted playsinline></video>
+                <video id="manim-vid-pre" muted playsinline
+                    style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;"></video>
+            </div>
+            <div id="image-layer">
+                <img id="image-display" src="" alt="">
+            </div>
+            <div id="scenes-container"></div>
+        </div>
+
+        <div id="gesture-hud">
+            <div id="g-dot" title="Camera gesture control"></div>
+            <div id="g-lbl"></div>
+            <div id="g-zoom">Pinch to zoom</div>
+        </div>
+        <video id="cam-vid" autoplay playsinline muted></video>
+
+        <div id="interaction-hint" style="
+            position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
+            background:rgba(0,0,0,0.60); color:#f6c44e;
+            font-family:'Caveat',cursive; font-size:1.35rem;
+            padding:7px 20px; border-radius:24px; border:1px solid rgba(246,196,78,0.3);
+            pointer-events:none; opacity:0; transition:opacity 0.4s ease;
+            z-index:55; white-space:nowrap;
+        "></div>
+
+        <div id="subtitle-overlay">
+            <div class="subtitle-text" id="subtitle-text"></div>
+        </div>
+
+        <div id="quiz-overlay" style="
+            display:none; position:fixed; inset:0; z-index:52;
+            flex-direction:column; align-items:center; justify-content:center;
+            background:rgba(13,17,23,0.96); padding:28px 320px 28px 28px;
+        ">
+            <div id="quiz-question-card" style="
+                max-width:640px; width:100%;
+                background:#161b22; border:1px solid rgba(255,255,255,0.08);
+                border-top:3px solid #f6c44e; border-radius:16px;
+                padding:24px 28px; margin-bottom:22px;
+            ">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:rgba(246,196,78,0.6);letter-spacing:.12em;margin-bottom:10px"
+                    id="quiz-q-label">QUESTION 1 / 1</div>
+                <div id="quiz-q-text" style="font-size:22px;line-height:1.65;color:#e6edf3"></div>
+            </div>
+            <div id="quiz-options"
+                style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:640px;width:100%;margin-bottom:20px">
+            </div>
+            <div id="quiz-feedback" style="
+                max-width:640px; width:100%; padding:12px 18px; border-radius:10px;
+                font-size:13px; line-height:1.6; display:none;
+                border:1px solid rgba(255,255,255,0.07);
+            "></div>
+
+            <div id="quiz-nav" style="
+                position:fixed;
+                bottom:16px;
+                left:20px;
+                display:flex;
+                gap:10px;
+                align-items:center;
+                z-index:65;
+                font-family:'JetBrains Mono',monospace; font-size:11px;
+            ">
+                <button onclick="prevSection()"
+                    style="background:none; border:none; color:var(--dim); cursor:pointer; padding:5px;">&larr; PREV
+                    SECTION</button>
+                <button onclick="nextSection()"
+                    style="background:none; border:none; color:var(--dim); cursor:pointer; padding:5px;">SKIP QUIZ
+                    &rarr;</button>
+            </div>
+        </div>
+
+        <div id="av-overlay">
+            <video id="av-vid" autoplay playsinline preload="auto"
+                style="position:absolute;width:1px;height:1px;opacity:0.01;pointer-events:none;"
+                crossOrigin="anonymous"></video>
+            <!-- av-canvas-prev: holds the last rendered frame during avatar transitions, fades out -->
+            <canvas id="av-canvas-prev"
+                style="width:100%;height:100%;display:block;position:absolute;top:0;left:0;opacity:0;transition:opacity 0.45s ease;pointer-events:none;z-index:2;"></canvas>
+            <canvas id="av-canvas"
+                style="width:100%;height:100%;display:block;position:absolute;top:0;left:0;z-index:1;"></canvas>
+            <div class="av-tag" id="av-tag">Avatar</div>
+            <div id="av-narr"></div>
+        </div>
+
+        <div id="av-dock"></div>
+
+        <div id="botbar">
+            <button class="nb" onclick="prevSection()" id="btn-prev" title="Previous Section">&#8592;</button>
+            <button class="pb" onclick="togglePlayPause()" id="play-pause-btn" title="Pause">&#10074;&#10074;</button>
+            <button class="nb" onclick="replaySection()" id="btn-replay" title="Replay Section">&#8634;</button>
+            <button class="nb" id="speed-btn" onclick="cycleSpeed()" title="Playback speed"
+                style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.04em;min-width:36px;">1×</button>
+            <div class="prog-wrap">
+                <div class="prog-meta">
+                    <span id="bot-label">Loading</span>
+                    <span id="bot-ctr">0 / 0</span>
+                </div>
+                <div class="prog-track">
+                    <div class="prog-fill" id="prog-fill" style="width:0%"></div>
+                </div>
+                <div class="seg-dots" id="seg-dots"></div>
+            </div>
+            <div class="tb-badge badge-intro" id="bot-badge" style="margin-left:auto">INTRO</div>
+            <button class="nb" onclick="nextSection()">&#8594;</button>
+        </div>
+
+    </div>
+    <script>
+        // ══════════════════════════════════════════════════════════
+        // V3 PLAYER — Data-driven from presentation.json
+        // ══════════════════════════════════════════════════════════
+
+        var SECTIONS = [];
+        var PRESENTATION = null;
+        var curSec = 0;
+        var G_PLAYBACK_INTENDED = true;
+        var timers = [];
+        var activeScene = null;
+        var _beatBlobCache = {};
+        var loadedScripts = {};
+        var JOB_BASE_URL = '';
+        var _karaokeTimer = null;
+
+        // ── SPEED CONTROL ──────────────────────────────────────────
+        var SPEED_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+        var _speedIdx = 2; // default 1×
+
+        function cycleSpeed() {
+            _speedIdx = (_speedIdx + 1) % SPEED_STEPS.length;
+            applySpeed();
+        }
+
+        function applySpeed() {
+            var rate = SPEED_STEPS[_speedIdx];
+            var btn = document.getElementById('speed-btn');
+            if (btn) btn.textContent = rate === 1 ? '1×' : rate + '×';
+            // Apply to all video elements: avatar, wan content, manim content
+            ['av-vid', 'wan-vid', 'manim-vid'].forEach(function (id) {
+                var v = document.getElementById(id);
+                if (!v) return;
+                v.playbackRate = rate;
+                // Attach a play-event listener (once per element) so speed is
+                // auto-restored after every .load() which resets playbackRate to 1
+                if (!v._speedListenerAttached) {
+                    v._speedListenerAttached = true;
+                    v.addEventListener('play', function () {
+                        v.playbackRate = SPEED_STEPS[_speedIdx];
+                    });
+                }
+            });
+        }
+        var _subtitleEpoch = 0; // incremented to kill stale subtitle drivers on quiz entry
+        window.SUB_LEAD_MS = 80;
+        document.addEventListener('DOMContentLoaded', function () {
+            var leadSlider = document.getElementById('dev-lead');
+            if (leadSlider) {
+                leadSlider.addEventListener('input', function (e) {
+                    document.getElementById('dev-lead-val').textContent = e.target.value;
+                    window.SUB_LEAD_MS = parseInt(e.target.value);
+                });
+            }
+        });
+
+        function clearKaraokeTimer() {
+            if (!_karaokeTimer) return;
+            if (typeof _karaokeTimer === 'number') {
+                clearInterval(_karaokeTimer);
+            } else if (_karaokeTimer && _karaokeTimer._cleanup) {
+                _karaokeTimer._cleanup();
+            }
+            _karaokeTimer = null;
+        }
+
+        function getMediaSrc(url) {
+            if (!url) return '';
+            if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:') || url.startsWith('/')) {
+                return url;
+            }
+            if (JOB_BASE_URL) {
+                var sep = JOB_BASE_URL.endsWith('/') ? '' : '/';
+                return JOB_BASE_URL + sep + url;
+            }
+            return url;
+        }
+
+        var BADGE_MAP = {
+            intro: { label: 'INTRO', cls: 'badge-intro' },
+            summary: { label: 'SUMMARY', cls: 'badge-summary' },
+            content: { label: 'CONTENT', cls: 'badge-content' },
+            example: { label: 'EXAMPLE', cls: 'badge-example' },
+            memory: { label: 'MEMORY', cls: 'badge-memory' },
+            memory_infographic: { label: 'MEMORY VISUAL', cls: 'badge-memory' },
+            recap: { label: 'RECAP', cls: 'badge-recap' },
+            quiz: { label: 'QUIZ', cls: 'badge-quiz' },
+        };
+
+        var _playerBooted = false;
+        window.onerror = function (msg, src, line, col, err) {
+            if (_playerBooted) {
+                console.warn('[V3] Runtime error (non-fatal):', msg, 'line', line);
+                return true;
+            }
+            var ls = document.getElementById('loading-screen');
+            var es = document.getElementById('error-screen');
+            var em = document.getElementById('error-msg');
+            if (ls) ls.style.display = 'none';
+            if (es) es.style.display = 'flex';
+            if (em) em.textContent = 'JS Error: ' + msg + ' (line ' + line + ')';
+            return false;
+        };
+
+        // ══════════════════════════════════════════════════════════
+        // BUFFERING TRACKER
+        // ══════════════════════════════════════════════════════════
+        function setupBufferingTracker() {
+            var spinner = document.getElementById('video-buffering');
+            var videoIds = ['av-vid', 'wan-vid', 'manim-vid'];
+
+            videoIds.forEach(function (id) {
+                var vidEl = document.getElementById(id);
+                if (!vidEl) return;
+
+                vidEl.addEventListener('waiting', function () {
+                    spinner.style.display = 'block';
+                    // When a CONTENT video buffers, pause av-vid so narration
+                    // and subtitles freeze in sync with the stalled visual.
+                    if (id !== 'av-vid' && G_PLAYBACK_INTENDED) {
+                        var avVid = document.getElementById('av-vid');
+                        if (avVid && !avVid.paused) {
+                            avVid.pause();
+                            vidEl._pausedAvForBuffer = true;
+                        }
+                    }
+                });
+
+                vidEl.addEventListener('playing', function () {
+                    spinner.style.display = 'none';
+                    // Resume av-vid if WE paused it for buffering
+                    if (id !== 'av-vid' && vidEl._pausedAvForBuffer) {
+                        vidEl._pausedAvForBuffer = false;
+                        var avVid = document.getElementById('av-vid');
+                        if (avVid && avVid.paused && G_PLAYBACK_INTENDED) {
+                            avVid.play().catch(function () { });
+                        }
+                    }
+                });
+
+                // USING CANPLAYTHROUGH TO FIX ROUND-AND-ROUND BUFFERING
+                vidEl.addEventListener('canplaythrough', function () {
+                    spinner.style.display = 'none';
+                });
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // FIX 1 — Aggressive preload: buffers avatar + up to 3 content beats
+        // ══════════════════════════════════════════════════════════
+        function preloadNextSection(idx) {
+            var next = SECTIONS[idx + 1];
+            if (!next) return;
+
+            // ── Avatar preload ──
+            var nextAvUrl = next.avatar_video || next.avatar_url || next.avatar || next.b2_url || '';
+            if (nextAvUrl) {
+                var preAv = document.getElementById('preload-av');
+                if (!preAv) {
+                    preAv = document.createElement('video');
+                    preAv.id = 'preload-av';
+                    preAv.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;';
+                    preAv.muted = true;
+                    preAv.preload = 'auto';
+                    preAv.crossOrigin = 'anonymous';
+                    document.body.appendChild(preAv);
+                }
+                if (preAv.src !== getMediaSrc(nextAvUrl)) {
+                    preAv.src = getMediaSrc(nextAvUrl);
+                    preAv.load();
+                    // Force browser to buffer beyond metadata
+                    preAv.play().then(function () { preAv.pause(); preAv.currentTime = 0; }).catch(function () { });
+                }
+            }
+
+            // ── Content video preload (first 3 beats, not just first) ──
+            var vbeats = next.visual_beats || [];
+            var bvp = next.beat_video_paths || [];
+            var allPaths = [];
+            vbeats.forEach(function (vb) { if (vb.video_path) allPaths.push(vb.video_path); });
+            if (allPaths.length === 0) allPaths = bvp.slice(0, 3);
+
+            allPaths.slice(0, 3).forEach(function (p, i) {
+                if (!p) return;
+                var preId = 'preload-vid-' + i;
+                var preVid = document.getElementById(preId);
+                if (!preVid) {
+                    preVid = document.createElement('video');
+                    preVid.id = preId;
+                    preVid.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;';
+                    preVid.muted = true;
+                    preVid.preload = 'auto';
+                    document.body.appendChild(preVid);
+                }
+                if (preVid.src !== getMediaSrc(p)) {
+                    preVid.src = getMediaSrc(p);
+                    preVid.load();
+                    preVid.play().then(function () { preVid.pause(); preVid.currentTime = 0; }).catch(function () { });
+                }
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // FIX 2 — Aggressive preload: Blob URL fetch cache
+        // ══════════════════════════════════════════════════════════
+        // Fetch a video URL into memory as a Blob URL — eliminates network latency on playback
+        function preFetchBeat(url, onReady) {
+            if (!url) return;
+            var fullUrl = getMediaSrc(url);
+            if (_beatBlobCache[fullUrl]) { if (onReady) onReady(_beatBlobCache[fullUrl]); return; }
+
+            fetch(fullUrl)
+                .then(function (r) { return r.blob(); })
+                .then(function (blob) {
+                    var blobUrl = URL.createObjectURL(blob);
+                    _beatBlobCache[fullUrl] = blobUrl;
+                    if (onReady) onReady(blobUrl);
+                })
+                .catch(function () {
+                    // Fetch failed (CORS etc) — fall back to direct URL
+                    if (onReady) onReady(fullUrl);
+                });
+        }
+
+        // Revoke all blob URLs when done with a section to free memory
+        function clearBeatBlobCache() {
+            Object.keys(_beatBlobCache).forEach(function (k) {
+                try { URL.revokeObjectURL(_beatBlobCache[k]); } catch (e) { }
+            });
+            _beatBlobCache = {};
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // BOOTSTRAP
+        // ══════════════════════════════════════════════════════════
+        (function bootstrap() {
+            var params = new URLSearchParams(window.location.search);
+            var jobId = params.get('job') || params.get('job_id');
+            var jsonUrl = '';
+
+            var path = window.location.pathname;
+            if (path.indexOf('/player/jobs/') === 0) {
+                var lastSlash = path.lastIndexOf('/');
+                JOB_BASE_URL = path.substring(0, lastSlash + 1);
+            }
+
+            if (jobId) {
+                jsonUrl = '/player/jobs/' + jobId + '/presentation.json?t=' + Date.now();
+            } else if (JOB_BASE_URL) {
+                jsonUrl = JOB_BASE_URL + 'presentation.json?t=' + Date.now();
+            } else {
+                jsonUrl = params.get('data') || 'presentation.json';
+                if (jsonUrl && !jsonUrl.startsWith('/')) {
+                    jsonUrl = getMediaSrc(jsonUrl);
+                }
+            }
+
+            fetch(jsonUrl)
+                .then(function (r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status + ': ' + jsonUrl);
+                    return r.json();
+                })
+                .then(function (data) {
+                    PRESENTATION = data;
+                    SECTIONS = data.sections || [];
+                    if (SECTIONS.length === 0) throw new Error('presentation.json has no sections');
+                    initPlayer();
+                })
+                .catch(function (err) {
+                    document.getElementById('loading-screen').style.display = 'none';
+                    var es = document.getElementById('error-screen');
+                    es.style.display = 'flex';
+                    document.getElementById('error-msg').textContent = String(err);
+                });
+        })();
+
+        // ══════════════════════════════════════════════════════════
+        // INIT
+        // ══════════════════════════════════════════════════════════
+        var avWebGL = null;
+
+        function initAvatarWebGL() {
+            var canvas = document.getElementById('av-canvas');
+            var video = document.getElementById('av-vid');
+            if (typeof THREE === 'undefined') {
+                canvas.style.display = 'none';
+                video.style.cssText = 'position:absolute;width:100%;height:100%;opacity:1;pointer-events:none;';
+                return;
+            }
+
+            var renderer;
+            try {
+                renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true });
+            } catch (e) {
+                console.warn('[V3] WebGL unavailable, falling back to raw video');
+                canvas.style.display = 'none';
+                video.style.cssText = 'position:absolute;width:100%;height:100%;opacity:1;pointer-events:none;';
+                return;
+            }
+            var overlay = document.getElementById('av-overlay');
+            var dpr = window.devicePixelRatio || 1;
+            renderer.setSize(overlay.offsetWidth, overlay.offsetHeight, false);
+            renderer.setPixelRatio(dpr);
+
+            var scene = new THREE.Scene();
+            var camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+            var texture = new THREE.VideoTexture(video);
+            texture.minFilter = THREE.LinearFilter;
+            texture.magFilter = THREE.LinearFilter;
+            texture.format = THREE.RGBAFormat;
+
+            var keyColor = new THREE.Color(0x00b140);
+            try {
+                var sampleCanvas = document.createElement('canvas');
+                sampleCanvas.width = 16; sampleCanvas.height = 16;
+                var sctx = sampleCanvas.getContext('2d');
+                sctx.drawImage(video, 0, 0, 16, 16);
+                var px = sctx.getImageData(2, 2, 1, 1).data;
+                if (px[1] > px[0] && px[1] > px[2]) {
+                    keyColor.setRGB(px[0] / 255, px[1] / 255, px[2] / 255);
+                }
+            } catch (e) { }
+
+            var material = new THREE.ShaderMaterial({
+                transparent: true,
+                uniforms: {
+                    map: { value: texture },
+                    keyColor: { value: keyColor },
+                    similarity: { value: 0.15 },
+                    smoothness: { value: 0.00 },
+                    uCanvasAspect: { value: 1.0 },
+                    uVideoAspect: { value: 9 / 16 }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+                `,
+                fragmentShader: `
+                    uniform sampler2D map;
+                    uniform vec3 keyColor;
+                    uniform float similarity;
+                    uniform float smoothness;
+                    uniform float uCanvasAspect;
+                    uniform float uVideoAspect;
+                    varying vec2 vUv;
+                    void main() {
+                        vec2 uv = vUv;
+                        if (uCanvasAspect > uVideoAspect) {
+                            float scale = uCanvasAspect / uVideoAspect;
+                            uv.x = (uv.x - 0.5) * scale + 0.5;
+                        } else {
+                            float scale = uVideoAspect / uCanvasAspect;
+                            uv.y = (uv.y - 0.5) * scale + 0.5;
+                        }
+                        vec4 videoColor = (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) ? vec4(0.0) : texture2D(map, uv);
+                        float Y1 = 0.299 * keyColor.r + 0.587 * keyColor.g + 0.114 * keyColor.b;
+                        float Cr1 = keyColor.r - Y1;
+                        float Cb1 = keyColor.b - Y1;
+                        float Y2 = 0.299 * videoColor.r + 0.587 * videoColor.g + 0.114 * videoColor.b;
+                        float Cr2 = videoColor.r - Y2;
+                        float Cb2 = videoColor.b - Y2;
+                        float blend = distance(vec2(Cr2, Cb2), vec2(Cr1, Cb1));
+                        float alpha = smoothstep(similarity, similarity + max(smoothness, 0.001), blend);
+                        gl_FragColor = vec4(videoColor.rgb * alpha, alpha);
+                    }
+                `,
+            });
+
+            var plane = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+            scene.add(plane);
+
+            avWebGL = { renderer: renderer, scene: scene, camera: camera, material: material };
+
+            function animate() {
+                requestAnimationFrame(animate);
+                renderer.render(scene, camera);
+            }
+            animate();
+
+            window.addEventListener('resize', function () {
+                var ov = document.getElementById('av-overlay');
+                var dpr = window.devicePixelRatio || 1;
+                var h = ov.clientHeight || 356;
+                var vid = document.getElementById('av-vid');
+                var vw = vid.videoWidth || 1080;
+                var vh = vid.videoHeight || 1920;
+                var aspect = vw / vh;
+                var w = h * aspect;
+                ov.style.width = w + 'px';
+                renderer.setSize(w, h, false);
+                renderer.setPixelRatio(dpr);
+                if (material) {
+                    material.uniforms.uCanvasAspect.value = w / h;
+                    material.uniforms.uVideoAspect.value = aspect;
+                }
+            });
+        }
+
+        function initPlayer() {
+            var title = PRESENTATION.presentation_title || PRESENTATION.title || (SECTIONS[0] && SECTIONS[0].title) || 'Lesson';
+            document.title = title + ' — V3';
+            document.getElementById('tb-title').textContent = title;
+            document.getElementById('av-tag').textContent =
+                (PRESENTATION.avatar_name || 'Priya') + ' · ' + (PRESENTATION.subject || 'Lesson');
+
+            buildTopDots();
+            buildScenes();
+            setupBufferingTracker();
+
+
+
+            document.getElementById('loading-screen').style.display = 'none';
+            document.getElementById('topbar').style.display = 'flex';
+            document.getElementById('botbar').style.display = 'flex';
+            document.getElementById('av-overlay').style.display = 'block';
+
+            if (typeof THREE !== 'undefined') {
+                var avVidEl = document.getElementById('av-vid');
+                if (avVidEl.readyState >= 2) {
+                    initAvatarWebGL();
+                } else {
+                    avVidEl.addEventListener('loadeddata', function () {
+                        initAvatarWebGL();
+                    }, { once: true });
+                }
+            }
+
+            var isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+            if (isMobile) {
+                document.getElementById('tap-to-start').style.display = 'flex';
+                document.getElementById('tap-to-start').addEventListener('click', function () {
+                    this.style.display = 'none';
+                    loadSection(0);
+                }, { once: true });
+            } else {
+                loadSection(0);
+            }
+            window._initGestures && window._initGestures();
+            _playerBooted = true;
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // BUILD SCENE DOM
+        // ══════════════════════════════════════════════════════════
+        function buildTopDots() {
+            var c = document.getElementById('tb-dots');
+            SECTIONS.forEach(function (s, i) {
+                var d = document.createElement('div');
+                d.className = 'tb-dot future'; d.id = 'tbd' + i;
+                d.onclick = function () { loadSection(i); };
+                d.title = s.title || '';
+                c.appendChild(d);
+            });
+        }
+
+        function buildScenes() {
+            var container = document.getElementById('scenes-container');
+            SECTIONS.forEach(function (sec, i) {
+                var div = document.createElement('div');
+                div.className = 'scene' + (i === 0 ? ' on' : '');
+                div.id = 'scene-' + i;
+                div.innerHTML = buildSceneHTML(sec);
+                container.appendChild(div);
+            });
+        }
+
+        function buildSceneHTML(sec) {
+            var type = sec.section_type || sec.type || 'content';
+            if (type === 'intro') return buildIntroHTML(sec);
+            if (type === 'summary') return buildSummaryHTML(sec);
+            if (type === 'memory') return buildMemoryHTML(sec);
+            if (type === 'recap') return buildRecapHTML(sec);
+            if (type === 'quiz') return buildQuizHTML(sec);
+            return buildTransparentLabel(sec);
+        }
+
+        function buildTransparentLabel(sec) {
+            return '<div style="position:absolute;bottom:80px;left:50%;transform:translateX(-50%)' +
+                ';font-family:\'JetBrains Mono\',monospace;font-size:11px;color:rgba(255,255,255,.2)' +
+                ';letter-spacing:.08em;pointer-events:none;">' + esc(sec.title || '') + '</div>';
+        }
+
+        function buildIntroHTML(sec) {
+            return '';
+        }
+
+        function buildSummaryHTML(sec) {
+            var allSegments = (sec.narration && sec.narration.segments) ? sec.narration.segments : [];
+            var bulletSegments = allSegments.filter(function (seg) {
+                return seg.purpose !== 'introduce';
+            });
+
+            var items = bulletSegments.slice(0, 6).map(function (seg, i) {
+                var origIdx = allSegments.indexOf(seg);
+                return '<div class="sbullet" id="sb-' + sec.section_id + '-' + origIdx + '">' +
+                    '<div class="sbullet-n">' + (i + 1) + '</div>' +
+                    '<div class="sbullet-t">' + esc((seg.text || '').substring(0, 120)) + '</div></div>';
+            }).join('');
+
+            return '<div style="align-items:flex-start;max-width:680px;margin:0 auto;width:100%;display:flex;flex-direction:column;gap:10px">' +
+                '<div class="sum-hd">By the end of this section, you will...</div>' + items + '</div>';
+        }
+
+        function buildMemoryHTML(sec) {
+            var rawCards = sec.flashcards || [];
+            var cards = rawCards.map(function (c) {
+                return {
+                    q: c.q || c.front || c.question || 'Question?',
+                    a: c.a || c.back || c.answer || ''
+                };
+            });
+            if (!cards.length && sec.narration && sec.narration.segments) {
+                sec.narration.segments.forEach(function (seg) {
+                    if (seg.purpose === 'quiz_question' || seg.purpose === 'introduce') {
+                        cards.push({ q: seg.text, a: '' });
+                    }
+                });
+            }
+            if (!cards.length) cards = [{ q: 'What was the key concept?', a: 'Review previous sections.' }];
+            FLASHCARDS_CUR = cards;
+            var pips = cards.map(function (_, i) {
+                return '<div class="cpip"' + (i === 0 ? ' style="background:var(--rose)"' : '') + ' onclick="goCard(' + i + ')"></div>';
+            }).join('');
+            return '<div class="mem-hd">Memory Cards</div>' +
+                '<div class="card-scene"><div class="card-3d" id="card-3d" onclick="flipCard()">' +
+                '<div class="card-face card-front"><div class="card-q" id="card-q">' + esc(cards[0].q) + '</div>' +
+                '<div class="card-hint">&#128161; Click to reveal</div></div>' +
+                '<div class="card-face card-back"><div class="card-a" id="card-a">' + esc(cards[0].a) + '</div></div>' +
+                '</div></div>' +
+                '<div class="card-nav"><button class="nb" onclick="prevCard()">&#8592;</button>' +
+                '<div class="card-pips" id="card-pips">' + pips + '</div>' +
+                '<button class="nb" onclick="nextCard()">&#8594;</button></div>' +
+                '<div class="card-ctr" id="card-ctr">1 of ' + cards.length + '</div>';
+        }
+
+        function buildRecapHTML(sec) {
+            if (!sec.narration || !sec.narration.segments) return '';
+            var segs = sec.narration.segments;
+            var items = segs.map(function (seg, i) {
+                return '<div id="rs-' + esc(String(sec.section_id)) + '-' + i + '" style="' +
+                    'position:absolute;width:90%;left:5%;bottom:90px;' +
+                    'opacity:0;transition:opacity 0.9s ease;' +
+                    'font-family:\'Caveat\',cursive;font-size:28px;font-weight:700;' +
+                    'color:#e6edf3;text-align:center;line-height:1.5;' +
+                    'text-shadow:0 2px 14px rgba(0,0,0,0.85),0 0 32px rgba(0,0,0,0.6);' +
+                    'pointer-events:none;">' + esc(seg.text || '') + '</div>';
+            }).join('');
+            return '<div style="position:absolute;inset:0;pointer-events:none;">' + items + '</div>';
+        }
+
+        function buildQuizHTML(sec) {
+            var quiz = sec.understanding_quiz || {};
+            var opts = quiz.options || {};
+            var optItems = Object.keys(opts).map(function (k) {
+                return '<div class="quiz-opt" id="qopt-' + sec.section_id + '-' + k + '" onclick="selectQuizOpt(\'' + sec.section_id + '\',\'' + k + '\')">' +
+                    '<span class="quiz-opt-lbl">' + k + '</span>' + esc(opts[k]) + '</div>';
+            }).join('');
+            return '<div class="quiz-card">' +
+                '<div class="quiz-q">' + esc(quiz.question || 'Quiz') + '</div>' +
+                '<div class="quiz-opts" id="qopts-' + sec.section_id + '">' + optItems + '</div>' +
+                '<div class="quiz-explanation" id="qexp-' + sec.section_id + '">' + esc(quiz.explanation || '') + '</div>' +
+                '</div>';
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // SECTION LOADING
+        // ══════════════════════════════════════════════════════════
+        function clearTimers() {
+            timers.forEach(function (t) { clearTimeout(t); clearInterval(t); });
+            timers = [];
+        }
+
+        document.addEventListener('touchstart', function unlockAudio() {
+            var vid = document.getElementById('av-vid');
+            vid.play().catch(function () { });
+            document.removeEventListener('touchstart', unlockAudio);
+        }, { once: true, passive: true });
+
+        // ── FIX 2: Crossfade avatar — stamps current frame, swaps src, fades old frame out ──
+        function crossfadeAvatar(newUrl) {
+            var canvasPrev = document.getElementById('av-canvas-prev');
+            var canvasCur = document.getElementById('av-canvas');
+
+            // Stamp current rendered frame into prev canvas instantly
+            if (canvasCur && canvasPrev && canvasCur.width > 0 && canvasCur.height > 0) {
+                canvasPrev.width = canvasCur.width;
+                canvasPrev.height = canvasCur.height;
+                try {
+                    var ctx = canvasPrev.getContext('2d');
+                    ctx.drawImage(canvasCur, 0, 0);
+                } catch (e) { }
+                canvasPrev.style.transition = 'opacity 0s'; // instant stamp, no animation yet
+                canvasPrev.style.opacity = '1';
+            }
+
+            // Swap the live video src
+            var vid = document.getElementById('av-vid');
+            vid.src = getMediaSrc(newUrl);
+            vid.load();
+            vid.play().catch(function () { });
+            applySpeed(); // restore rate after .load() reset
+
+            // Two rAF ticks later: fade the frozen prev frame out
+            requestAnimationFrame(function () {
+                requestAnimationFrame(function () {
+                    if (canvasPrev) {
+                        canvasPrev.style.transition = 'opacity 0.45s ease';
+                        canvasPrev.style.opacity = '0';
+                    }
+                });
+            });
+        }
+
+        function loadSection(idx) {
+            clearTimers();
+            applySpeed(); // restore playback rate for new section
+            clearBeatBlobCache(); // free previous section's blob URLs
+
+            if (activeScene) { try { activeScene.dispose(); } catch (e) { } activeScene = null; }
+            var threejsLayer = document.getElementById('threejs-layer');
+            if (threejsLayer && typeof threejsLayer._pointerCleanup === 'function') {
+                try { threejsLayer._pointerCleanup(); } catch (e) { }
+                threejsLayer._pointerCleanup = null;
+            }
+            if (threejsLayer) {
+                threejsLayer.classList.remove('on');
+                threejsLayer.innerHTML = '';
+            }
+
+            var subtitleEl = document.getElementById('subtitle-overlay');
+            if (subtitleEl) subtitleEl.style.display = 'none';
+            clearKaraokeTimer();
+
+            var imgLayer = document.getElementById('image-layer');
+            if (imgLayer) { imgLayer.classList.remove('vis'); imgLayer.classList.remove('on'); }
+
+            var manimLayer = document.getElementById('manim-layer');
+            var manimVid = document.getElementById('manim-vid');
+
+            // FIX 4a: Fade manim layer out before clearing src — avoids black flash
+            if (manimVid) {
+                manimVid.pause();
+                if (manimLayer && manimLayer.classList.contains('on')) {
+                    // Fade out, then wipe src after the transition
+                    manimLayer.style.transition = 'opacity 0.3s ease';
+                    manimLayer.style.opacity = '0';
+                    var _ml = manimLayer, _mv = manimVid;
+                    timers.push(setTimeout(function () {
+                        _mv.removeAttribute('src');
+                        _mv.src = '';
+                        _mv.load();
+                        _ml.classList.remove('on');
+                        _ml.style.display = 'none';
+                        _ml.style.opacity = '1';
+                        _ml.style.transition = '';
+                    }, 300));
+                } else {
+                    manimVid.removeAttribute('src');
+                    manimVid.src = '';
+                    manimVid.load();
+                }
+            }
+            if (manimLayer) {
+                // Only hide immediately if not currently visible (no fade needed)
+                if (!manimLayer.classList.contains('on')) {
+                    manimLayer.classList.remove('on');
+                    manimLayer.style.display = 'none';
+                }
+            }
+
+            var wanLayer = document.getElementById('wan-layer');
+            var wanVid = document.getElementById('wan-vid');
+            var wanPre = document.getElementById('wan-vid-pre');
+            wanLayer.classList.remove('on');
+
+            // FIX 4b: Pause wan video but keep last frame visible — src cleared by loadVideoScene
+            wanVid.pause();
+            // Do NOT wipe src — keeps last frame during transition; new section will overwrite it
+
+            if (wanPre) {
+                wanPre.pause();
+                // Same: hold last frame, let loadVideoScene clear and swap
+            }
+
+            var prevEl = document.getElementById('scene-' + curSec);
+            if (prevEl) prevEl.classList.remove('on');
+            curSec = idx;
+            var sec = SECTIONS[idx];
+            if (!sec) return;
+            var sceneEl = document.getElementById('scene-' + idx);
+            if (sceneEl) sceneEl.classList.add('on');
+
+            for (var i = 0; i < SECTIONS.length; i++) {
+                var d = document.getElementById('tbd' + i);
+                if (d) d.className = 'tb-dot ' + (i < idx ? 'past' : i === idx ? 'cur' : 'future');
+            }
+
+            var secType = sec.section_type || sec.type || 'content';
+            document.getElementById('av-overlay').setAttribute('data-sectype', secType);
+            var badge = BADGE_MAP[secType] || { label: secType.toUpperCase(), cls: 'badge-content' };
+            document.getElementById('tb-secname').textContent = '/ ' + (sec.title || '');
+            document.getElementById('bot-label').textContent = sec.title || '';
+            document.getElementById('bot-ctr').textContent = (idx + 1) + ' / ' + SECTIONS.length;
+            document.getElementById('prog-fill').style.width = ((idx + 1) / SECTIONS.length * 100) + '%';
+            ['top-badge', 'bot-badge'].forEach(function (id) {
+                var el = document.getElementById(id);
+                if (!el) return;
+                el.textContent = badge.label;
+                el.className = 'tb-badge ' + badge.cls;
+            });
+            document.getElementById('seg-dots').innerHTML = '';
+
+            var wrap = document.getElementById('av-overlay');
+            if (secType === 'quiz') {
+                wrap.setAttribute('data-sectype', 'quiz');
+                wrap.style.display = 'block';
+                window.dispatchEvent(new Event('resize'));
+                initQuizSection(sec);
+                return;
+            }
+            document.getElementById('quiz-overlay').style.display = 'none';
+
+            var vid = document.getElementById('av-vid');
+            vid.onended = null;
+            var avatarUrl = sec.avatar_video || sec.avatar_url || sec.avatar || sec.b2_url || '';
+
+            if (avatarUrl) {
+                // FIX 2c: Crossfade to new avatar instead of hard-cutting
+                crossfadeAvatar(avatarUrl);
+
+                // FIX 5: Start preloading next section after 2s (was 5s)
+                timers.push(setTimeout(function () {
+                    if (curSec === idx) preloadNextSection(idx);
+                }, 2000));
+
+                // FIX 5b: Also trigger preload at 65% play progress (covers short sections)
+                vid.addEventListener('timeupdate', function preloadTrigger() {
+                    if (!vid.duration || !isFinite(vid.duration)) return;
+                    if (vid.currentTime / vid.duration > 0.65) {
+                        vid.removeEventListener('timeupdate', preloadTrigger);
+                        if (curSec === idx) preloadNextSection(idx);
+                    }
+                });
+
+                var sectionAtLoad = curSec;
+                var _stallCheck = setInterval(function () {
+                    if (curSec !== sectionAtLoad) { clearInterval(_stallCheck); return; }
+                    if (!G_PLAYBACK_INTENDED) return;
+                    if (vid.paused && !vid.ended && vid.readyState >= 3) {
+                        vid.play().catch(function () { });
+                    }
+                }, 2000);
+                timers.push(_stallCheck);
+
+                vid.addEventListener('loadeddata', function resampleKey() {
+                    vid.removeEventListener('loadeddata', resampleKey);
+                    window.dispatchEvent(new Event('resize'));
+                    if (!avWebGL || !avWebGL.material) return;
+                    try {
+                        var sc = document.createElement('canvas');
+                        sc.width = 16; sc.height = 16;
+                        var sx = sc.getContext('2d');
+                        sx.drawImage(vid, 0, 0, 16, 16);
+                        var px = sx.getImageData(2, 2, 1, 1).data;
+                        if (px[1] > px[0] && px[1] > px[2]) {
+                            avWebGL.material.uniforms.keyColor.value.setRGB(
+                                px[0] / 255, px[1] / 255, px[2] / 255
+                            );
+                        }
+                    } catch (e) { }
+                });
+
+                var _avBox = { started: false };
+                vid.onplay = (function (box) { return function () { box.started = true; }; })(_avBox);
+                var _ttsRealDur = sec.segment_duration_seconds || null;
+                var _manimLoaded = false;
+                var _videoLoaded = false; // FIX: guard against durationchange double-firing loadVideoScene
+
+                vid.onloadedmetadata = (function (box) {
+                    return function () {
+                        var actualDur = (vid.duration && isFinite(vid.duration))
+                            ? vid.duration
+                            : (_ttsRealDur || 15);
+                        var renderer = sec.renderer || 'none';
+                        if (renderer === 'manim') {
+                            var hasVid = sec.video_path || (sec.manim_video_paths && sec.manim_video_paths.length > 0);
+                            if (hasVid) { _manimLoaded = true; loadManimScene(sec, actualDur, box); }
+                        } else if (renderer === 'video' || renderer === 'wan_video' ||
+                            renderer === 'text_to_video' || renderer === 'image_to_video' ||
+                            sec.section_type === 'recap' ||
+                            sec.section_type === 'memory_infographic') {
+                            _videoLoaded = true; // FIX: mark so durationchange skips
+                            loadVideoScene(sec, actualDur, box);
+                        }
+                        startSubtitleDriver(sec, sectionAtLoad);
+                    };
+                })(_avBox);
+
+                vid.addEventListener('durationchange', (function (box, capturedSec) {
+                    return function () {
+                        if (!isFinite(vid.duration) || vid.duration <= 0) return;
+                        var renderer = capturedSec.renderer || 'none';
+                        if (renderer === 'video' || renderer === 'wan_video' ||
+                            renderer === 'text_to_video' || renderer === 'image_to_video' ||
+                            capturedSec.section_type === 'recap' ||
+                            capturedSec.section_type === 'memory_infographic') {
+                            if (_videoLoaded) return; // FIX: skip if already loaded via onloadedmetadata
+                            _videoLoaded = true;
+                            loadVideoScene(capturedSec, vid.duration, box);
+                            return;
+                        }
+                        if (renderer !== 'manim') return;
+                        if (_manimLoaded) return;
+                        var hasVid = capturedSec.video_path || (capturedSec.manim_video_paths && capturedSec.manim_video_paths.length > 0);
+                        if (!hasVid) return;
+                        var prev = _ttsRealDur || 15;
+                        if (Math.abs(vid.duration - prev) > 1.5) {
+                            _manimLoaded = true;
+                            loadManimScene(capturedSec, vid.duration, box);
+                        }
+                    };
+                })(_avBox, sec), { once: true });
+
+                // FIX 3: Gate transition on readyState, not fixed timeout
+                vid.onended = function () {
+                    if (sec.understanding_quiz || (sec.questions && sec.questions.length > 0)) {
+                        initQuizSection(sec);
+                        return;
+                    }
+                    if (curSec >= SECTIONS.length - 1) return;
+
+                    var nextIdx = curSec + 1;
+                    var nextSec = SECTIONS[nextIdx];
+                    if (!nextSec) return;
+
+                    var nextUrl = nextSec.avatar_video || nextSec.avatar_url || nextSec.avatar || nextSec.b2_url || '';
+                    var preAv = document.getElementById('preload-av');
+                    var filename = nextUrl ? nextUrl.split('/').pop() : '';
+
+                    var isReady = preAv && preAv.src && filename && preAv.readyState >= 3 &&
+                        preAv.src.indexOf(filename) !== -1;
+
+                    if (isReady) {
+                        // Already buffered — transition immediately, no spinner
+                        loadSection(nextIdx);
+                    } else {
+                        // Not ready — poll every 100ms up to 2.5s, then give up and load anyway
+                        var spinner = document.getElementById('video-buffering');
+                        if (spinner) spinner.style.display = 'block';
+                        var waited = 0;
+                        var poll = setInterval(function () {
+                            waited += 100;
+                            var nowReady = preAv && preAv.readyState >= 3;
+                            if (nowReady || waited >= 2500) {
+                                clearInterval(poll);
+                                if (spinner) spinner.style.display = 'none';
+                                loadSection(nextIdx);
+                            }
+                        }, 100);
+                        timers.push(poll);
+                    }
+                };
+            } else {
+                vid.src = '';
+                var fallbackDur = sec.segment_duration_seconds || sec.dur || 30;
+                startSubtitleDriver(sec, curSec);
+                timers.push(setTimeout(function () {
+                    if (sec.understanding_quiz || (sec.questions && sec.questions.length > 0)) {
+                        initQuizSection(sec);
+                    } else if (curSec < SECTIONS.length - 1) loadSection(curSec + 1);
+                }, fallbackDur * 1000));
+
+                var renderer = sec.renderer || 'none';
+                if (renderer === 'manim') {
+                    loadManimScene(sec, fallbackDur, { started: true });
+                } else if (renderer === 'video' || renderer === 'wan_video' ||
+                    renderer === 'text_to_video' || renderer === 'image_to_video' ||
+                    sec.section_type === 'recap' ||
+                    sec.section_type === 'memory_infographic') {
+                    loadVideoScene(sec, fallbackDur, { started: true });
+                }
+            }
+
+            document.getElementById('av-narr').textContent = sec.narration && sec.narration.full_text
+                ? sec.narration.full_text.substring(0, 200) : '';
+
+            var secType2 = sec.section_type || sec.type || 'content';
+            if (secType2 === 'summary') initSummarySection(sec, idx);
+            if (secType2 === 'memory') initMemorySection(sec, idx);
+            if (secType2 === 'memory_infographic') initMemoryInfographicSection(sec, idx);
+            if (secType2 === 'recap') initRecapSection(sec, idx);
+            G_PLAYBACK_INTENDED = true;
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // SUBTITLES
+        // ══════════════════════════════════════════════════════════
+        function startSubtitleDriver(sec, sectionAtLoad) {
+            if (!sec.narration || !sec.narration.segments) return;
+            var segments = sec.narration.segments;
+            var avEl = document.getElementById('av-vid');
+            var subtitleEl = document.getElementById('subtitle-overlay');
+            var textEl = document.getElementById('subtitle-text');
+
+            var table = [];
+            var accum = 0;
+            for (var i = 0; i < segments.length; i++) {
+                var seg = segments[i];
+                var start, end, dur;
+                if (seg.start_seconds !== undefined && seg.end_seconds !== undefined) {
+                    start = seg.start_seconds;
+                    end = seg.end_seconds;
+                    dur = end - start;
+                } else {
+                    dur = seg.duration_seconds || seg.duration || 5;
+                    start = accum;
+                    end = accum + dur;
+                    accum = end;
+                }
+                table.push({ start: start, end: end, dur: dur, text: (seg.text || '').trim() });
+            }
+
+            var lastIdx = -1;
+            var myEpoch = _subtitleEpoch; // capture current epoch; invalidated when quiz starts
+
+            function onTimeUpdate() {
+                // Kill this driver if the section changed OR a quiz entry invalidated it
+                if (curSec !== sectionAtLoad || _subtitleEpoch !== myEpoch) {
+                    avEl.removeEventListener('timeupdate', onTimeUpdate);
+                    clearKaraokeTimer();
+                    subtitleEl.style.display = 'none';
+                    return;
+                }
+                var t = avEl.currentTime;
+                // Last-match-wins: find the latest segment whose start <= t
+                var activeIdx = -1;
+                for (var i = 0; i < table.length; i++) {
+                    if (t >= table[i].start) activeIdx = i;
+                }
+                if (activeIdx >= 0 && activeIdx !== lastIdx) {
+                    lastIdx = activeIdx;
+                    var row = table[activeIdx];
+                    if (row.text) {
+                        renderSubtitleKaraoke(subtitleEl, textEl, row.text, row.dur, sectionAtLoad, row.start);
+                    }
+                }
+            }
+            avEl.addEventListener('timeupdate', onTimeUpdate);
+        }
+
+        function renderSubtitleKaraoke(overlay, textEl, beatText, beatDur, sectionAtLoad, beatStart) {
+            if (window.SUB_CONFIG.mode === 'off') { overlay.style.display = 'none'; return; }
+            if (window.SUB_CONFIG.mode === 'full') {
+                textEl.className = 'subtitle-text';
+                textEl.innerHTML = esc(beatText);
+                overlay.style.display = 'block';
+                return;
+            }
+
+            textEl.className = '';
+            overlay.style.display = 'block';
+            clearKaraokeTimer();
+
+            var rawSentences = beatText.match(/[^.!?]+[.!?]*/g) || [beatText];
+            var sentences = rawSentences.map(function (s) { return s.trim(); }).filter(Boolean);
+
+            var allWords = [], wordSentIdx = [];
+            sentences.forEach(function (sent, si) {
+                sent.split(/\s+/).filter(Boolean).forEach(function (w) {
+                    allWords.push(w); wordSentIdx.push(si);
+                });
+            });
+            if (allWords.length === 0) return;
+
+            // ── BETTER TIMING: use actual character count proportionally ──
+            // Short words get minimum 80ms, long words get proportional time
+            var totalChars = 0;
+            var charCounts = allWords.map(function (w) {
+                var c = Math.max(w.replace(/[^a-zA-Z]/g, '').length, 2);
+                // Add pause weight for punctuation
+                if (w.match(/[,;]/)) c += 4;
+                if (w.match(/[.!?]/)) c += 8;
+                totalChars += c;
+                return c;
+            });
+
+            // Build cumulative time offsets from beatStart
+            // Add a small lead offset so words appear just BEFORE they're spoken
+            var LEAD_MS = (window.SUB_LEAD_MS !== undefined) ? window.SUB_LEAD_MS : 80;
+            var cursor = 0;
+            var wordTimes = charCounts.map(function (c) {
+                var s = beatStart + (cursor / totalChars) * beatDur - (LEAD_MS / 1000);
+                cursor += c;
+                var e = beatStart + (cursor / totalChars) * beatDur - (LEAD_MS / 1000);
+                return { start: s, end: e };
+            });
+
+            var lastWordIdx = -1, lastSentIdx = -1;
+            var myKaraokeEpoch = _subtitleEpoch;
+
+            function renderSentence(si, activeWordInAll) {
+                var sentWords = [];
+                allWords.forEach(function (w, i) { if (wordSentIdx[i] === si) sentWords.push({ w: w, gi: i }); });
+                var html = sentWords.map(function (obj) {
+                    return '<span class="sub-word future" id="kw-' + obj.gi + '">' + esc(obj.w) + '</span>';
+                }).join(' ');
+                textEl.innerHTML = html;
+                sentWords.forEach(function (obj) {
+                    var el = document.getElementById('kw-' + obj.gi);
+                    if (!el) return;
+                    if (obj.gi < activeWordInAll) el.className = 'sub-word spoken';
+                    else if (obj.gi === activeWordInAll) el.className = 'sub-word active';
+                    else el.className = 'sub-word future';
+                });
+            }
+
+            // ── Use timeupdate instead of setInterval for better sync ──
+            var avVid = document.getElementById('av-vid');
+
+            function onKaraokeTimeUpdate() {
+                if (curSec !== sectionAtLoad || _subtitleEpoch !== myKaraokeEpoch) {
+                    avVid.removeEventListener('timeupdate', onKaraokeTimeUpdate);
+                    return;
+                }
+                var t = avVid.currentTime;
+
+                // Find active word by time
+                var wordIdx = -1;
+                for (var k = 0; k < wordTimes.length; k++) {
+                    if (t >= wordTimes[k].start) {
+                        wordIdx = k;
+                    } else {
+                        break;
+                    }
+                }
+                if (wordIdx < 0) wordIdx = 0;
+                if (wordIdx >= allWords.length) wordIdx = allWords.length - 1;
+
+                var sentIdx = wordSentIdx[wordIdx];
+
+                if (sentIdx !== lastSentIdx) {
+                    lastSentIdx = sentIdx;
+                    lastWordIdx = -1;
+                    renderSentence(sentIdx, wordIdx);
+                } else if (wordIdx !== lastWordIdx) {
+                    var prev = document.getElementById('kw-' + lastWordIdx);
+                    if (prev) prev.className = 'sub-word spoken';
+                    var cur = document.getElementById('kw-' + wordIdx);
+                    if (cur) cur.className = 'sub-word active';
+                }
+                lastWordIdx = wordIdx;
+            }
+
+            avVid.addEventListener('timeupdate', onKaraokeTimeUpdate);
+
+            // Store cleanup reference on _karaokeTimer as a sentinel
+            _karaokeTimer = {
+                _cleanup: function () {
+                    avVid.removeEventListener('timeupdate', onKaraokeTimeUpdate);
+                }
+            };
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // VIDEO SCENE LOADER
+        // ══════════════════════════════════════════════════════════
+        function loadVideoScene(sec, avatarDuration, _avBox) {
+            if (!_avBox) _avBox = { started: true };
+            var wanLayer = document.getElementById('wan-layer');
+            var wanVid = document.getElementById('wan-vid');
+            var imgLayer = document.getElementById('image-layer');
+            var imgEl = document.getElementById('image-display');
+            var avEl = document.getElementById('av-vid');
+            var sectionAtLoad = curSec;
+
+            // ── Build schedule (same logic as before) ──
+            var schedule = [];
+            var vbeats = sec.visual_beats || [];
+            var bvp = sec.beat_video_paths || [];
+            var rs = sec.render_spec || {};
+            var infos = rs.infographic_beats || [];
+
+            var infoByStart = {};
+            infos.forEach(function (b) {
+                if (b.start_seconds !== undefined) infoByStart[String(b.start_seconds)] = b;
+            });
+
+            if (vbeats.length > 0) {
+                var vidIdx = 0;
+                vbeats.forEach(function (vb) {
+                    var start = vb.beat_start_seconds;
+                    var end = vb.beat_end_seconds;
+                    var vtype = vb.visual_type;
+                    if (vtype === 'image' || vtype === 'infographic') {
+                        var info = infoByStart[String(start)] || {};
+                        var imgSrc = vb.image_source || info.image_source || '';
+                        schedule.push({ start: start, end: end, type: 'image', src: imgSrc });
+                    } else {
+                        var path = vb.video_path || bvp[vidIdx] || '';
+                        vidIdx++;
+                        schedule.push({ start: start, end: end, type: 'video', src: path });
+                    }
+                });
+            } else {
+                var segs = (sec.narration && sec.narration.segments) ? sec.narration.segments : [];
+                var flatFiles = [];
+                segs.forEach(function (seg, i) {
+                    var bv = (seg.beat_videos && seg.beat_videos.length > 0)
+                        ? seg.beat_videos[0]
+                        : (seg.video_path || bvp[i] || '');
+                    flatFiles.push(bv);
+                });
+                if (flatFiles.every(function (f) { return !f; })) flatFiles = bvp;
+                var accum = 0;
+                segs.forEach(function (seg, i) {
+                    var dur = seg.duration_seconds || seg.duration || 15;
+                    var start = (seg.start_seconds !== undefined) ? seg.start_seconds : accum;
+                    var end = start + dur;
+                    accum = end;
+                    schedule.push({ start: start, end: end, type: 'video', src: flatFiles[i] || '' });
+                });
+            }
+
+            if (infos.length > 0) {
+                infos.forEach(function (ib) {
+                    if (!ib.image_source) return;
+                    var ibStart = ib.start_seconds || 0;
+                    var ibEnd = ib.end_seconds || 9999;
+                    var replaced = false;
+                    for (var si = 0; si < schedule.length; si++) {
+                        if (schedule[si].type === 'video' && Math.abs(schedule[si].start - ibStart) < 1.0) {
+                            schedule[si] = { start: ibStart, end: ibEnd, type: 'image', src: ib.image_source };
+                            replaced = true; break;
+                        }
+                    }
+                    if (!replaced) schedule.push({ start: ibStart, end: ibEnd, type: 'image', src: ib.image_source });
+                });
+                schedule.sort(function (a, b) { return a.start - b.start; });
+            }
+
+            if (schedule.length === 0) return;
+
+            // ── PRE-FETCH ALL VIDEO BEATS into Blob URLs immediately ──
+            // This runs in background — by the time each beat starts, it's in memory
+            schedule.forEach(function (beat) {
+                if (beat.type === 'video' && beat.src) {
+                    preFetchBeat(beat.src, function (blobUrl) {
+                        beat._blobUrl = blobUrl; // store resolved URL on the beat object
+                    });
+                }
+            });
+
+            wanLayer.classList.add('on');
+            var currentIdx = -1;
+
+            function showBeat(idx) {
+                if (idx < 0 || idx >= schedule.length) return;
+                var beat = schedule[idx];
+                currentIdx = idx;
+
+                if (beat.type === 'image') {
+                    wanVid.pause();
+                    if (beat.src) {
+                        imgEl.src = getMediaSrc(beat.src);
+                        imgLayer.classList.add('on');
+                        requestAnimationFrame(function () { imgLayer.classList.add('vis'); });
+                    }
+                } else {
+                    imgLayer.classList.remove('vis');
+                    setTimeout(function () { imgLayer.classList.remove('on'); }, 440);
+                    if (!beat.src) return;
+
+                    // Use blob URL if fetch completed, otherwise fall back to direct URL
+                    var playUrl = beat._blobUrl || getMediaSrc(beat.src);
+
+                    if (wanVid.src !== playUrl) {
+                        wanVid.src = playUrl;
+                        wanVid.load();
+                    }
+                    wanVid.play().catch(function () { });
+                }
+
+                // Pre-fetch the NEXT beat while this one is starting
+                var next = schedule[idx + 1];
+                if (next && next.type === 'video' && next.src && !next._blobUrl) {
+                    preFetchBeat(next.src, function (blobUrl) { next._blobUrl = blobUrl; });
+                }
+            }
+
+            function onTimeUpdate() {
+                if (curSec !== sectionAtLoad) {
+                    avEl.removeEventListener('timeupdate', onTimeUpdate);
+                    return;
+                }
+                var t = avEl.currentTime;
+                var activeIdx = -1;
+                for (var i = 0; i < schedule.length; i++) {
+                    var isLast = (i === schedule.length - 1);
+                    var hit = isLast ? (t >= schedule[i].start)
+                        : (t >= schedule[i].start && t < schedule[i].end);
+                    if (hit) { activeIdx = i; break; }
+                }
+                if (activeIdx < 0) return;
+
+                if (activeIdx !== currentIdx) {
+                    showBeat(activeIdx);
+                }
+
+                // Keep wan video in sync with avatar — restart if it stalled
+                if (currentIdx >= 0 && schedule[currentIdx].type === 'video') {
+                    if (wanVid.paused && !wanVid.ended && wanVid.readyState >= 3 && !avEl.paused) {
+                        wanVid.play().catch(function () { });
+                    }
+                }
+            }
+
+            if (_avBox.started) {
+                avEl.addEventListener('timeupdate', onTimeUpdate);
+                showBeat(0);
+            } else {
+                function waitStart() {
+                    if (curSec !== sectionAtLoad) return;
+                    if (_avBox.started) {
+                        avEl.removeEventListener('timeupdate', waitStart);
+                        avEl.addEventListener('timeupdate', onTimeUpdate);
+                        showBeat(0);
+                    }
+                }
+                avEl.addEventListener('timeupdate', waitStart);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // MANIM BEAT LOADER
+        // ══════════════════════════════════════════════════════════
+        function loadManimScene(sec, avatarDuration, _avBox) {
+            if (!_avBox) _avBox = { started: true };
+            var manimLayer = document.getElementById('manim-layer');
+            var manimVid = document.getElementById('manim-vid');
+            var imgLayer = document.getElementById('image-layer');
+            var imgDisplay = document.getElementById('image-display');
+            var avVid = document.getElementById('av-vid');
+            var sectionAtLoad = curSec;
+
+            // FIX Bug 3: restore display so .on class can make the layer visible again
+            // (loadSection sets display:none as a race-condition guard)
+            if (manimLayer) manimLayer.style.display = '';
+
+            var manimPaths = sec.manim_video_paths || (sec.video_path ? [sec.video_path] : []);
+            var visualBeats = (sec.visual_beats || []).slice().sort(function (a, b) {
+                return (a.beat_start_seconds || 0) - (b.beat_start_seconds || 0);
+            });
+
+            if (manimPaths.length === 0 && visualBeats.length === 0) return;
+
+            var schedule = [];
+
+            var rsBeats = sec.render_spec && sec.render_spec.manim_beats;
+            var useRenderSpec = rsBeats && rsBeats.length > 0 && rsBeats.length >= manimPaths.length;
+
+            if (useRenderSpec) {
+                var accT = 0;
+                rsBeats.forEach(function (mb, i) {
+                    var dur = mb.duration || mb.duration_seconds || 15;
+                    schedule.push({
+                        start: accT,
+                        end: accT + dur,
+                        type: 'manim',
+                        videoPath: manimPaths[i] || null,
+                        _rsIdx: i
+                    });
+                    accT += dur;
+                });
+                visualBeats.forEach(function (vb) {
+                    if ((vb.visual_type === 'image' || vb.visual_type === 'infographic') && vb.image_source) {
+                        schedule.push({
+                            start: vb.beat_start_seconds || 0,
+                            end: vb.beat_end_seconds || 9999,
+                            type: 'image',
+                            imgSrc: vb.image_source
+                        });
+                    }
+                });
+                schedule.sort(function (a, b) { return a.start - b.start; });
+
+            } else {
+                var manimIdx = 0;
+                schedule = visualBeats.map(function (vb) {
+                    if ((vb.visual_type === 'image' || vb.visual_type === 'infographic') && vb.image_source) {
+                        return {
+                            start: vb.beat_start_seconds || 0,
+                            end: vb.beat_end_seconds || 9999,
+                            type: 'image',
+                            imgSrc: vb.image_source
+                        };
+                    }
+                    var path = vb.video_path || manimPaths[manimIdx] || null;
+                    manimIdx++;
+                    return {
+                        start: vb.beat_start_seconds || 0,
+                        end: vb.beat_end_seconds || 9999,
+                        type: 'manim',
+                        videoPath: path
+                    };
+                });
+
+                if (schedule.length === 0 && manimPaths.length > 0) {
+                    var segs = sec.narration && sec.narration.segments ? sec.narration.segments : [];
+                    var accT2 = 0;
+                    for (var fi = 0; fi < manimPaths.length; fi++) {
+                        var dur2 = segs[fi] ? (segs[fi].duration_seconds || 15) : 15;
+                        schedule.push({ start: accT2, end: accT2 + dur2, type: 'manim', videoPath: manimPaths[fi] });
+                        accT2 += dur2;
+                    }
+                }
+            }
+
+            var infoBe = sec.render_spec && sec.render_spec.infographic_beats;
+            if (infoBe && infoBe.length > 0) {
+                infoBe.forEach(function (ib) {
+                    if (!ib.image_source) return;
+                    var ibStart = ib.start_seconds || 0;
+                    var ibEnd = ib.end_seconds || 9999;
+                    var already = schedule.some(function (s) {
+                        return s.type === 'image' && s.imgSrc === ib.image_source
+                            && Math.abs(s.start - ibStart) < 0.5;
+                    });
+                    if (!already) {
+                        schedule.push({ start: ibStart, end: ibEnd, type: 'image', imgSrc: ib.image_source });
+                    }
+                });
+                schedule.sort(function (a, b) { return a.start - b.start; });
+            }
+
+            var firstManim = null;
+            for (var si = 0; si < schedule.length; si++) {
+                if (schedule[si].type === 'manim' && schedule[si].videoPath) {
+                    firstManim = schedule[si]; break;
+                }
+            }
+            if (!firstManim) {
+                var hasImages = schedule.some(function (s) { return s.type === 'image'; });
+                if (!hasImages) return;
+            } else {
+                manimLayer.classList.add('on');
+                manimVid.src = getMediaSrc(firstManim.videoPath);
+                manimVid.load();
+            }
+
+            var currentBeatIdx = -1;
+
+            function switchToBeat(beat) {
+                if (beat.type === 'image') {
+                    safeLoadImage(imgDisplay, getMediaSrc(beat.imgSrc));
+                    imgLayer.classList.add('on');
+                    setTimeout(function () { imgLayer.classList.add('vis'); }, 20);
+                } else {
+                    imgLayer.classList.remove('vis');
+                    setTimeout(function () {
+                        if (!imgLayer.classList.contains('vis')) imgLayer.classList.remove('on');
+                    }, 420);
+                    if (beat.videoPath) {
+                        var newSrc = getMediaSrc(beat.videoPath);
+                        if (manimVid.getAttribute('src') !== newSrc) {
+                            manimVid.src = newSrc;
+                            manimVid.load();
+                            manimVid.play().catch(function () { });
+                        }
+                    }
+                }
+            }
+
+            var _syncInt = setInterval(function () {
+                if (curSec !== sectionAtLoad) { clearInterval(_syncInt); return; }
+                if (!G_PLAYBACK_INTENDED) return;
+                if (!avVid) return;
+                var t = avVid.currentTime;
+
+                var activeIdx = -1;
+                for (var i = 0; i < schedule.length; i++) {
+                    if (schedule[i].type === 'image' && t >= schedule[i].start && t < schedule[i].end) {
+                        activeIdx = i; break;
+                    }
+                }
+                if (activeIdx < 0) {
+                    for (var j = 0; j < schedule.length; j++) {
+                        if (schedule[j].type === 'manim' && t >= schedule[j].start && t < schedule[j].end) {
+                            activeIdx = j; break;
+                        }
+                    }
+                }
+                if (activeIdx < 0 && schedule.length > 0) {
+                    var last = schedule[schedule.length - 1];
+                    if (t >= last.start) activeIdx = schedule.length - 1;
+                }
+
+                if (activeIdx >= 0 && activeIdx !== currentBeatIdx) {
+                    currentBeatIdx = activeIdx;
+                    switchToBeat(schedule[activeIdx]);
+                }
+
+                if (firstManim) {
+                    if (!avVid.paused && manimVid.paused && !manimVid.ended && manimVid.readyState >= 2) {
+                        manimVid.play().catch(function () { });
+                    } else if (avVid.paused && !manimVid.paused) {
+                        manimVid.pause();
+                    }
+                }
+            }, 120);
+            timers.push(_syncInt);
+
+            var _startCheck = setInterval(function () {
+                if (curSec !== sectionAtLoad) { clearInterval(_startCheck); return; }
+                if (!G_PLAYBACK_INTENDED) return;
+                if (_avBox.started) {
+                    clearInterval(_startCheck);
+                    manimVid.currentTime = 0;
+                    manimVid.play().catch(function () { });
+                }
+            }, 50);
+            timers.push(_startCheck);
+
+            var _stallCheck = setInterval(function () {
+                if (curSec !== sectionAtLoad) { clearInterval(_stallCheck); return; }
+                if (!G_PLAYBACK_INTENDED) return;
+                if (manimVid.paused && !manimVid.ended && manimVid.readyState >= 3 && avVid && !avVid.paused) {
+                    manimVid.play().catch(function () { });
+                }
+            }, 2000);
+            timers.push(_stallCheck);
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // IMAGE FALLBACK HELPER
+        // ══════════════════════════════════════════════════════════
+        function safeLoadImage(imgEl, baseUrl) {
+            if (!imgEl || !baseUrl) return;
+            var exts = ['.png', '.jpg', '.jpeg'];
+            var base = baseUrl.replace(/\.(png|jpg|jpeg)$/i, '');
+            var extIdx = 0;
+            var origExt = (baseUrl.match(/\.(png|jpg|jpeg)$/i) || [''])[0].toLowerCase();
+            if (origExt) {
+                exts = [origExt].concat(exts.filter(function (e) { return e !== origExt; }));
+            }
+            function tryNext() {
+                if (extIdx >= exts.length) return;
+                imgEl.onerror = function () { extIdx++; tryNext(); };
+                imgEl.src = base + exts[extIdx];
+            }
+            tryNext();
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // SECTION INITS
+        // ══════════════════════════════════════════════════════════
+        function initMemorySection(sec) {
+            if (!sec.narration || !sec.narration.segments) return;
+            var avVid = document.getElementById('av-vid');
+            if (!avVid) return;
+            var sectionAtLoad = curSec;
+            var segments = sec.narration.segments;
+
+            // Build timeline: each segment gets a [cardStart, flipAt, nextCardAt]
+            // seg0 = intro (no card), seg1+ = one card each
+            var timeline = [];
+            var accum = 0;
+            segments.forEach(function (seg, i) {
+                var dur = seg.duration_seconds || seg.duration || 8;
+                var start = accum;
+                accum += dur;
+                timeline.push({ cardStart: start, flipAt: start + dur * 0.45, end: accum, cardIdx: i - 1 });
+                // cardIdx -1 = intro seg (skip), 0+ = card index
+            });
+
+            var flippedIdx = -1, shownIdx = -1;
+            var memInt = setInterval(function () {
+                if (curSec !== sectionAtLoad) { clearInterval(memInt); return; }
+                var t = avVid.currentTime;
+                for (var j = 0; j < timeline.length; j++) {
+                    var entry = timeline[j];
+                    if (entry.cardIdx < 0) continue; // skip intro
+                    // Show card (unflipped) at segment start
+                    if (t >= entry.cardStart && shownIdx < entry.cardIdx) {
+                        shownIdx = entry.cardIdx;
+                        goCard(entry.cardIdx);   // showCard() inside resets flip to false
+                    }
+                    // Flip to answer partway through segment
+                    if (t >= entry.flipAt && flippedIdx < entry.cardIdx) {
+                        flippedIdx = entry.cardIdx;
+                        var c3d = document.getElementById('card-3d');
+                        if (c3d && !c3d.classList.contains('flipped')) {
+                            c3d.classList.add('flipped');
+                            cardFlipped = true;
+                        }
+                    }
+                }
+            }, 200);
+            timers.push(memInt);
+        }
+
+        function initSummarySection(sec) {
+            if (!sec.narration || !sec.narration.segments) return;
+            var segments = sec.narration.segments;
+            var sectionAtLoad = curSec;
+            var avEl = document.getElementById('av-vid');
+
+            segments.forEach(function (_, i) {
+                var el = document.getElementById('sb-' + sec.section_id + '-' + i);
+                if (el) el.classList.remove('show');
+            });
+
+            function onTimeUpdate() {
+                if (curSec !== sectionAtLoad) {
+                    avEl.removeEventListener('timeupdate', onTimeUpdate);
+                    return;
+                }
+                var t = avEl.currentTime;
+                segments.forEach(function (seg, i) {
+                    var threshold = (seg.start_seconds !== undefined) ? seg.start_seconds : (i * 5);
+                    if (t >= threshold) {
+                        var el = document.getElementById('sb-' + sec.section_id + '-' + i);
+                        if (el && !el.classList.contains('show')) el.classList.add('show');
+                    }
+                });
+            }
+
+            avEl.addEventListener('timeupdate', onTimeUpdate);
+        }
+
+        function initRecapSection(sec) {
+            if (!sec.narration || !sec.narration.segments) return;
+            var segs = sec.narration.segments;
+            var sectionAtLoad = curSec;
+
+            segs.forEach(function (_, i) {
+                var el = document.getElementById('rs-' + sec.section_id + '-' + i);
+                if (el) el.classList.remove('show');
+            });
+
+            var first = document.getElementById('rs-' + sec.section_id + '-0');
+            if (first) first.classList.add('show');
+
+            var beatTimes = [];
+            var accum = 0;
+            segs.forEach(function (seg) {
+                beatTimes.push(accum);
+                accum += (seg.duration_seconds || 15);
+            });
+
+            var avEl = document.getElementById('av-vid');
+            function onTimeUpdate() {
+                if (curSec !== sectionAtLoad) {
+                    avEl.removeEventListener('timeupdate', onTimeUpdate);
+                    return;
+                }
+                var t = avEl.currentTime;
+                for (var i = 1; i < segs.length; i++) {
+                    if (t >= beatTimes[i]) {
+                        var el = document.getElementById('rs-' + sec.section_id + '-' + i);
+                        if (el && !el.classList.contains('show')) el.classList.add('show');
+                    }
+                }
+            }
+            avEl.addEventListener('timeupdate', onTimeUpdate);
+        }
+
+        function initMemoryInfographicSection(sec) {
+            // Memory infographic uses loadVideoScene() for visual display.
+            // Visual beats are driven by render_spec.infographic_beats timing.
+            // No additional UI needed — images sync to avatar narration automatically.
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // QUIZ INTERACTION
+        // ══════════════════════════════════════════════════════════
+        function selectQuizOpt(secId, key) {
+            var sec = SECTIONS.find(function (s) { return s.section_id === secId || String(s.section_id) === String(secId); });
+            if (!sec) return;
+            var quiz = sec.understanding_quiz || {};
+            var correctKey = quiz.correct;
+            var opts = document.querySelectorAll('[id^="qopt-' + secId + '-"]');
+            opts.forEach(function (el) {
+                el.onclick = null;
+                var k = el.id.split('-').pop();
+                if (k === correctKey) el.classList.add('correct');
+                else if (k === key) el.classList.add('wrong');
+            });
+            var exp = document.getElementById('qexp-' + secId);
+            if (exp) exp.classList.add('show');
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // FLASHCARD STATE
+        // ══════════════════════════════════════════════════════════
+        var cardIdx = 0, cardFlipped = false, FLASHCARDS_CUR = [];
+
+        function flipCard() {
+            cardFlipped = !cardFlipped;
+            var el = document.getElementById('card-3d');
+            if (el) el.classList.toggle('flipped', cardFlipped);
+        }
+        function nextCard() { if (cardIdx < FLASHCARDS_CUR.length - 1) { cardIdx++; showCard(); } }
+        function prevCard() { if (cardIdx > 0) { cardIdx--; showCard(); } }
+        function goCard(i) { cardIdx = i; showCard(); }
+        function showCard() {
+            var fc = FLASHCARDS_CUR[cardIdx];
+            if (!fc) return;
+            var qEl = document.getElementById('card-q'), aEl = document.getElementById('card-a');
+            if (qEl) qEl.textContent = fc.q || '';
+            if (aEl) aEl.innerHTML = fc.a || '';
+            var c3d = document.getElementById('card-3d');
+            if (c3d) c3d.classList.remove('flipped');
+            cardFlipped = false;
+            var ctr = document.getElementById('card-ctr');
+            if (ctr) ctr.textContent = (cardIdx + 1) + ' of ' + FLASHCARDS_CUR.length;
+            var pips = document.getElementById('card-pips');
+            if (!pips) return;
+            for (var i = 0; i < pips.children.length; i++) {
+                pips.children[i].className = 'cpip' + (i === cardIdx ? ' on' : i < cardIdx ? ' done' : '');
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // NAVIGATION
+        // ══════════════════════════════════════════════════════════
+        function replaySection() { loadSection(curSec); }
+        function nextSection() { if (curSec < SECTIONS.length - 1) loadSection(curSec + 1); }
+        function prevSection() { if (curSec > 0) loadSection(curSec - 1); }
+
+        function togglePlayPause() {
+            var avVid = document.getElementById('av-vid');
+            var wanVid = document.getElementById('wan-vid');
+            var manimVid = document.getElementById('manim-vid');
+            var btn = document.getElementById('play-pause-btn');
+            if (!avVid) return;
+            // Use G_PLAYBACK_INTENDED as source of truth so button works
+            // even during explanation clips where avVid may have ended.
+            if (!G_PLAYBACK_INTENDED) {
+                avVid.play().catch(function () { });
+                if (wanVid && wanVid.src && wanVid.paused) wanVid.play().catch(function () { });
+                if (manimVid && manimVid.src && manimVid.paused) manimVid.play().catch(function () { });
+                if (btn) btn.innerHTML = '&#10074;&#10074;';
+                G_PLAYBACK_INTENDED = true;
+            } else {
+                avVid.pause();
+                if (wanVid && !wanVid.paused) wanVid.pause();
+                if (manimVid && !manimVid.paused) manimVid.pause();
+                if (btn) btn.innerHTML = '&#9654;';
+                G_PLAYBACK_INTENDED = false;
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // QUIZ — BRANCHING with synced option reveals
+        // ══════════════════════════════════════════════════════════
+        function initQuizSection(sec) {
+            var overlay = document.getElementById('quiz-overlay');
+            var qLabel = document.getElementById('quiz-q-label');
+            var qText = document.getElementById('quiz-q-text');
+            var qOptions = document.getElementById('quiz-options');
+            var qFeedback = document.getElementById('quiz-feedback');
+            var vid = document.getElementById('av-vid');
+
+            // FIX 1: Sever the main section's metadata listener so it doesn't restart the main subtitle driver
+            vid.onloadedmetadata = null;
+
+            overlay.style.display = 'flex';
+            // Restore full quiz UI state on entry
+            overlay.style.background = 'rgba(13,17,23,0.96)';
+            var qCard = document.getElementById('quiz-question-card');
+            if (qCard) qCard.style.display = 'block';
+            if (qOptions) { qOptions.style.display = 'grid'; qOptions.style.opacity = '1'; }
+            qFeedback.style.display = 'none';
+
+            // Restore quiz-nav
+            var qNav = document.getElementById('quiz-nav');
+            if (qNav) qNav.style.display = 'flex';
+
+            // Kill any running subtitle driver from the preceding content section
+            // (curSec doesn't change on quiz entry so the normal guard won't fire)
+            _subtitleEpoch++;
+            clearKaraokeTimer();
+            var subOverlay = document.getElementById('subtitle-overlay');
+            if (subOverlay) subOverlay.style.display = 'none';
+
+            var questions = (sec.questions && sec.questions.length > 0)
+                ? sec.questions
+                : (sec.understanding_quiz ? [sec.understanding_quiz] : []);
+            if (questions.length === 0) {
+                overlay.style.display = 'none';
+                if (curSec < SECTIONS.length - 1) loadSection(curSec + 1);
+                return;
+            }
+            var qIdx = 0;
+
+            // ── helpers ─────────────────────────────────────────
+
+            // playClip with optional subtitle text (karaoke-synced)
+            function playClip(url, onEnd, scriptText) {
+                vid.onended = null;
+                _subtitleEpoch++; // kills any running karaoke from previous clip
+                // Always clear karaoke before playing a new clip
+                clearKaraokeTimer();
+
+                var stText = document.getElementById('subtitle-text');
+                var stOverlay = document.getElementById('subtitle-overlay');
+
+                if (url) {
+                    if (scriptText && stText && stOverlay) {
+                        stText.innerHTML = ''; // clear stale words before new clip loads
+                        // FIX: drive subtitle via karaoke (word-by-word) synced to clip duration
+                        // rather than dumping the full paragraph as a static block
+                        var _quizSubSecAtLoad = curSec;
+                        vid.addEventListener('loadedmetadata', function onClipMeta() {
+                            vid.removeEventListener('loadedmetadata', onClipMeta);
+                            if (curSec !== _quizSubSecAtLoad) return;
+                            var dur = (vid.duration && isFinite(vid.duration)) ? vid.duration : 10;
+                            renderSubtitleKaraoke(stOverlay, stText, scriptText, dur, _quizSubSecAtLoad, 0);
+                        });
+                        stOverlay.style.display = 'block';
+                    } else if (stOverlay) {
+                        stOverlay.style.display = 'none';
+                    }
+
+                    vid.src = getMediaSrc(url);
+                    vid.load();
+                    vid.play().catch(function () { });
+                    vid.onended = function () { if (onEnd) onEnd(); };
+                } else {
+                    if (stOverlay) stOverlay.style.display = 'none';
+                    timers.push(setTimeout(onEnd || function () { }, 2000));
+                }
+            }
+
+            // ── PROPER FIX: showExplanationVisual ──
+            function showExplanationVisual(q) {
+                var ev = q.explanation_visual;
+                if (!ev) return; // Abort if no visual block exists
+
+                // 1. Find out if we actually have a video or image path in the JSON
+                var vpath = ev.video_path || ev.wan_video_path || null;
+                if (!vpath && ev.image_to_video_beats && ev.image_to_video_beats.length > 0) {
+                    var eb = ev.image_to_video_beats[0];
+                    vpath = eb.video_path || eb.wan_video_path || null;
+                }
+                var imageSrc = ev.image_source || null;
+
+                // 2. CRITICAL FIX: If we have NEITHER a video NOR an image,
+                // do NOT hide the quiz UI. Leave it visible so the user can read the text!
+                if (!vpath && !imageSrc) {
+                    return;
+                }
+
+                // 3. If we reach here, we DEFINITELY have a video or image to show.
+                // NOW we can safely hide the quiz UI for a clean background display.
+                document.getElementById('quiz-overlay').style.background = 'transparent';
+
+                var card = document.getElementById('quiz-question-card');
+                if (card) card.style.display = 'none';
+
+                var optsEl = document.getElementById('quiz-options');
+                if (optsEl) optsEl.style.display = 'none';
+
+                var feedbackEl = document.getElementById('quiz-feedback');
+                if (feedbackEl) feedbackEl.style.display = 'none';
+
+                var navEl = document.getElementById('quiz-nav');
+                if (navEl) navEl.style.display = 'none';
+
+                var subEl = document.getElementById('subtitle-overlay');
+                if (subEl) subEl.style.display = 'none';
+                clearKaraokeTimer();
+
+                // 4. Reset video/image layers
+                var renderer = ev.renderer || 'manim';
+                var manimLayer = document.getElementById('manim-layer');
+                var manimVid = document.getElementById('manim-vid');
+                var wanLayer = document.getElementById('wan-layer');
+                var wanVid = document.getElementById('wan-vid');
+                var imgLayer = document.getElementById('image-layer');
+                var imgDisplay = document.getElementById('image-display');
+
+                manimLayer.classList.remove('on');
+                wanLayer.classList.remove('on');
+                imgLayer.classList.remove('vis');
+                imgLayer.classList.remove('on');
+
+                // 5. Play the video or show the fallback image
+                if (vpath) {
+                    if (renderer === 'manim') {
+                        manimVid.src = getMediaSrc(vpath);
+                        manimVid.load();
+                        manimVid.oncanplay = function () {
+                            manimVid.oncanplay = null;
+                            manimVid.play().catch(function () { });
+                            applySpeed();
+                        };
+                        manimLayer.style.display = ''; // FIX: clear display:none guard before activating
+                        manimLayer.classList.add('on');
+                    } else {
+                        wanVid.src = getMediaSrc(vpath);
+                        wanVid.load();
+                        wanVid.oncanplay = function () {
+                            wanVid.oncanplay = null;
+                            wanVid.play().catch(function () { });
+                            applySpeed();
+                        };
+                        wanLayer.classList.add('on');
+                    }
+                } else if (imageSrc) {
+                    safeLoadImage(imgDisplay, getMediaSrc(imageSrc));
+                    imgLayer.classList.add('on');
+                    setTimeout(function () { imgLayer.classList.add('vis'); }, 20);
+                }
+            }
+
+            // ── Restore all quiz UI after explanation finishes ──
+            function restoreQuizUI() {
+                clearKaraokeTimer();
+                var subEl2 = document.getElementById('subtitle-overlay');
+                if (subEl2) subEl2.style.display = 'none';
+                document.getElementById('subtitle-text').innerHTML = '';
+
+                document.getElementById('quiz-overlay').style.background = 'rgba(13,17,23,0.96)';
+
+                var card = document.getElementById('quiz-question-card');
+                if (card) card.style.display = 'block';
+
+                var optsEl = document.getElementById('quiz-options');
+                if (optsEl) { optsEl.style.display = 'grid'; optsEl.style.opacity = '1'; }
+
+                // feedback stays hidden — next question will reset it
+                var feedbackEl = document.getElementById('quiz-feedback');
+                if (feedbackEl) feedbackEl.style.display = 'none';
+
+                // Restore nav
+                var navEl = document.getElementById('quiz-nav');
+                if (navEl) navEl.style.display = 'flex';
+
+                // Stop explanation video layers
+                var mL = document.getElementById('manim-layer');
+                if (mL) { mL.style.display = ''; mL.classList.remove('on'); } // FIX: clear inline style guard
+                document.getElementById('wan-layer').classList.remove('on');
+            }
+
+            // ── main question renderer ───────────────────────────
+
+            function showQuestion(qi) {
+                var q = questions[qi];
+                if (!q) {
+                    // All questions done — restore UI, advance section
+                    restoreQuizUI();
+                    overlay.style.display = 'none';
+                    timers.push(setTimeout(function () {
+                        if (curSec < SECTIONS.length - 1) loadSection(curSec + 1);
+                    }, 600));
+                    return;
+                }
+
+                var quizSecAtLoad = curSec;
+                qLabel.textContent = 'QUESTION ' + (qi + 1) + ' / ' + questions.length;
+                qText.textContent = q.question_text || q.question || '';
+                qOptions.innerHTML = '';
+                qFeedback.style.display = 'none';
+
+                var clips = q.avatar_clips || {};
+                var narr = q.narration || {};
+                var revealTimes = narr.option_reveal_seconds || [];
+                var opts = q.options || {};
+                var keys = Object.keys(opts);
+                var answered = false;
+
+                var buttons = {};
+                keys.forEach(function (key) {
+                    var btn = document.createElement('button');
+                    btn.id = 'quiz-opt-' + key;
+                    btn.textContent = key + ': ' + opts[key];
+                    btn.style.cssText = [
+                        'display:none', 'width:100%',
+                        'padding:14px 18px', 'border-radius:10px', 'cursor:pointer',
+                        'font-family:\'Sora\',sans-serif', 'font-size:17px', 'text-align:left',
+                        'background:#21262d', 'color:#e6edf3',
+                        'border:1px solid rgba(255,255,255,0.08)',
+                        'transition:all .25s ease', 'opacity:0'
+                    ].join(';');
+
+                    btn.addEventListener('mouseover', function () {
+                        if (!answered) btn.style.borderColor = '#f6c44e';
+                    });
+                    btn.addEventListener('mouseout', function () {
+                        if (!answered) btn.style.borderColor = 'rgba(255,255,255,0.08)';
+                    });
+
+                    btn.addEventListener('click', function () {
+                        if (answered) return;
+                        answered = true;
+                        onAnswer(key);
+                    });
+
+                    qOptions.appendChild(btn);
+                    buttons[key] = btn;
+                });
+
+                function revealButton(key) {
+                    var b = buttons[key];
+                    if (!b || b.style.display !== 'none') return;
+                    b.style.display = 'block';
+                    requestAnimationFrame(function () {
+                        b.style.opacity = '1';
+                        b.style.transform = 'translateY(0)';
+                    });
+                }
+
+                function revealAllButtons() {
+                    keys.forEach(function (k) { revealButton(k); });
+                }
+
+                function onAnswer(key) {
+                    var correct = q.correct_option || q.correct || '';
+                    var isRight = (key === correct);
+
+                    keys.forEach(function (k) {
+                        var b = buttons[k];
+                        if (!b) return;
+                        if (k === correct) {
+                            b.style.background = 'rgba(126,231,135,0.14)';
+                            b.style.borderColor = '#7ee787';
+                            b.style.color = '#7ee787';
+                        } else if (k === key && !isRight) {
+                            b.style.background = 'rgba(255,107,138,0.14)';
+                            b.style.borderColor = '#ff6b8a';
+                            b.style.color = '#ff6b8a';
+                        }
+                        b.style.cursor = 'default';
+                        b.style.pointerEvents = 'none';
+                    });
+
+                    var expl = q.explanation || '';
+                    if (expl) {
+                        qFeedback.style.display = 'block';
+                        qFeedback.style.background = isRight ? 'rgba(126,231,135,0.07)' : 'rgba(255,107,138,0.07)';
+                        qFeedback.style.borderColor = isRight ? 'rgba(126,231,135,0.25)' : 'rgba(255,107,138,0.25)';
+                        qFeedback.style.color = '#e6edf3';
+                        qFeedback.innerHTML = (isRight ? '✅ ' : '❌ ') + esc(expl);
+                    }
+
+                    var nextClip = isRight ? clips.correct : clips.wrong;
+                    // FIX 2: Use the _script keys present in the JSON payload
+                    var nextScript = isRight ? (narr.correct_script || narr.correct) : (narr.wrong_script || narr.wrong);
+
+                    // Step 1: Play correct/wrong clip
+                    playClip(nextClip, function () {
+                        if (curSec !== quizSecAtLoad) return;
+
+                        // Step 2: Show explanation visual (hides quiz UI cleanly)
+                        showExplanationVisual(q);
+
+                        // FIX 5: Small delay before playing explanation clip so
+                        // the visual layer has time to initialise (avoids race condition)
+                        timers.push(setTimeout(function () {
+                            if (curSec !== quizSecAtLoad) return;
+
+                            // Step 3: Play explanation avatar clip alongside the visual
+                            // Pass the explanation script to render subtitles
+                            var explScript = narr.explanation_script || narr.explanation || q.explanation || '';
+
+                            playClip(clips.explanation, function () {
+                                if (curSec !== quizSecAtLoad) return;
+
+                                // Step 4: Restore quiz UI then advance to next question
+                                timers.push(setTimeout(function () {
+                                    if (curSec !== quizSecAtLoad) return;
+                                    restoreQuizUI();
+                                    qIdx++;
+                                    showQuestion(qIdx);
+                                }, 900));
+                            }, explScript);  // <--- Pass the text instead of null
+
+                        }, 300)); // 300 ms delay gives video element time to load
+
+                    }, nextScript);
+                }
+
+                // Schedule option reveals during the question clip
+                keys.forEach(function (key, idx) {
+                    var delay = (revealTimes[idx] !== undefined)
+                        ? Math.round(revealTimes[idx] * 1000)
+                        : (idx + 1) * 2500;
+                    timers.push(setTimeout(function () {
+                        if (curSec !== quizSecAtLoad) return;
+                        revealButton(key);
+                    }, delay));
+                });
+
+                // Play question clip; on end reveal any options not yet shown
+                playClip(clips.question, function () {
+                    if (curSec !== quizSecAtLoad) return;
+                    revealAllButtons();
+                }, narr.question_script || narr.question); // FIX 3: Catch the proper question script
+            }
+
+            showQuestion(qIdx);
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // KEYBOARD
+        // ══════════════════════════════════════════════════════════
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'ArrowRight') nextSection();
+            if (e.key === 'ArrowLeft') prevSection();
+            if (e.key === ' ') { e.preventDefault(); replaySection(); }
+            if (e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+                var el = document.getElementById('dev-overlay');
+                el.style.display = el.style.display === 'none' ? 'block' : 'none';
+            }
+        });
+
+        // ══════════════════════════════════════════════════════════
+        // GESTURE ENGINE
+        // ══════════════════════════════════════════════════════════
+        var _gestureModel = null, _gestureOn = false, _lastPinch = null, _lastGTime = 0, _lastGName = '';
+        var _waveHist = [], _avPaused = false;
+        var GESTURE_COOLDOWN = 800;
+
+        function _initGestures() {
+            if (typeof handpose === 'undefined') return;
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 320, height: 240 } })
+                .then(function (stream) {
+                    var cam = document.getElementById('cam-vid');
+                    cam.srcObject = stream; cam.play();
+                    document.getElementById('g-dot').classList.add('active');
+                    document.getElementById('g-zoom').classList.add('show');
+                    handpose.load().then(function (m) { _gestureModel = m; _gestureOn = true; _detectLoop(); }).catch(function () { });
+                })
+                .catch(function () { document.getElementById('g-dot').classList.add('denied'); });
+        }
+        window._initGestures = _initGestures;
+
+        function _detectLoop() {
+            if (!_gestureOn || !_gestureModel) return;
+            _gestureModel.estimateHands(document.getElementById('cam-vid')).then(function (hands) {
+                if (hands.length > 0) _processHand(hands[0]);
+                requestAnimationFrame(_detectLoop);
+            }).catch(function () { requestAnimationFrame(_detectLoop); });
+        }
+
+        function _processHand(hand) {
+            var lm = hand.landmarks;
+            var thumbTip = lm[4], indexTip = lm[8], wrist = lm[0];
+            var pd = _dist(thumbTip, indexTip);
+            if (pd < 60) { _lastPinch = pd; _showGHint('Pinch Zoom'); return; }
+            _lastPinch = null;
+            var up = _fingersUp(lm);
+            if (up >= 4) { _fireGesture('palm', function () { _toggleAvatar(); _showGHint('Pause / Resume'); }); return; }
+            if (up === 1 && (indexTip[1] - lm[5][1]) > 40) { _fireGesture('down', function () { replaySection(); _showGHint('Replay'); }); return; }
+            _waveHist.push(wrist[0]);
+            if (_waveHist.length > 20) _waveHist.shift();
+            if (_waveHist.length >= 20) {
+                var mn = Math.min.apply(null, _waveHist), mx = Math.max.apply(null, _waveHist);
+                if (mx - mn > 80) { _fireGesture('wave', function () { nextSection(); _showGHint('Next'); }); _waveHist = []; }
+            }
+        }
+
+        function _dist(a, b) { return Math.sqrt(Math.pow(a[0] - b[0], 2) + Math.pow(a[1] - b[1], 2)); }
+        function _fingersUp(lm) {
+            var tips = [8, 12, 16, 20], pips = [6, 10, 14, 18], c = 0;
+            tips.forEach(function (t, i) { if (lm[t][1] < lm[pips[i]][1]) c++; });
+            return c;
+        }
+        function _fireGesture(name, fn) {
+            var now = Date.now();
+            if (name === _lastGName && now - _lastGTime < GESTURE_COOLDOWN) return;
+            _lastGName = name; _lastGTime = now; fn();
+        }
+        function _toggleAvatar() {
+            var v = document.getElementById('av-vid');
+            _avPaused = !_avPaused;
+            if (_avPaused) v.pause(); else v.play().catch(function () { });
+        }
+        var _gLblTimer = null;
+        function _showGHint(txt) {
+            var el = document.getElementById('g-lbl');
+            el.textContent = txt; el.classList.add('show');
+            clearTimeout(_gLblTimer);
+            _gLblTimer = setTimeout(function () { el.classList.remove('show'); }, 1500);
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // TOUCH
+        // ══════════════════════════════════════════════════════════
+        (function () {
+            var el = document.getElementById('main');
+            var sx = 0, sy = 0, st = 0;
+            el.addEventListener('touchstart', function (e) {
+                sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now();
+            }, { passive: true });
+            el.addEventListener('touchend', function (e) {
+                var dx = e.changedTouches[0].clientX - sx;
+                var dy = e.changedTouches[0].clientY - sy;
+                var dt = Date.now() - st;
+                if (dt < 300 && Math.abs(dx) < 12 && Math.abs(dy) < 12) { _toggleAvatar(); return; }
+                if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+                    if (dx < 0) nextSection(); else replaySection();
+                }
+            }, { passive: true });
+            var lastTD = null;
+            el.addEventListener('touchmove', function (e) {
+                if (e.touches.length === 2) {
+                    var td = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                    lastTD = td;
+                }
+            }, { passive: true });
+            el.addEventListener('touchend', function (e) { if (e.touches.length < 2) lastTD = null; }, { passive: true });
+        })();
+
+        // ══════════════════════════════════════════════════════════
+        // UTILITY
+        // ══════════════════════════════════════════════════════════
+        function esc(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // DEV MODE
+        // ══════════════════════════════════════════════════════════
+        window.SUB_CONFIG = { mode: 'karaoke' };
+
+        document.getElementById('dev-sim').addEventListener('input', function (e) {
+            document.getElementById('dev-sim-val').textContent = e.target.value;
+            if (window.avWebGL && window.avWebGL.material) window.avWebGL.material.uniforms.similarity.value = parseFloat(e.target.value);
+        });
+        document.getElementById('dev-smo').addEventListener('input', function (e) {
+            document.getElementById('dev-smo-val').textContent = e.target.value;
+            if (window.avWebGL && window.avWebGL.material) window.avWebGL.material.uniforms.smoothness.value = parseFloat(e.target.value);
+        });
+        document.getElementById('dev-intro').addEventListener('input', function (e) {
+            document.getElementById('dev-intro-val').textContent = e.target.value;
+            var ov = document.getElementById('av-overlay');
+            if (ov.getAttribute('data-sectype') === 'intro') {
+                ov.style.height = e.target.value + 'vh';
+                window.dispatchEvent(new Event('resize'));
+            } else {
+                ov.style.removeProperty('height');
+            }
+        });
+        document.getElementById('dev-cont').addEventListener('input', function (e) {
+            document.getElementById('dev-cont-val').textContent = e.target.value;
+            var ov = document.getElementById('av-overlay');
+            if (ov.getAttribute('data-sectype') !== 'intro') {
+                ov.style.height = e.target.value + 'vh';
+                window.dispatchEvent(new Event('resize'));
+            } else {
+                ov.style.removeProperty('height');
+            }
+        });
+        document.getElementById('dev-three').addEventListener('input', function (e) {
+            document.getElementById('dev-three-val').textContent = e.target.value;
+            var tl = document.getElementById('manim-layer');
+            if (tl) { tl.style.transformOrigin = 'center'; tl.style.transform = 'scale(' + e.target.value + ')'; }
+        });
+        document.getElementById('dev-raw').addEventListener('change', function (e) {
+            var cvs = document.getElementById('av-canvas');
+            var vid = document.getElementById('av-vid');
+            if (e.target.checked) {
+                cvs.style.opacity = '0';
+                vid.style.opacity = '1';
+                vid.style.width = '100%';
+                vid.style.height = '100%';
+                vid.style.position = 'absolute';
+                vid.style.top = '0';
+                vid.style.left = '0';
+            } else {
+                cvs.style.opacity = '1';
+                vid.style.opacity = '0.01';
+                vid.style.width = '1px';
+                vid.style.height = '1px';
+            }
+        });
+        document.getElementById('dev-sub-size').addEventListener('input', function (e) {
+            document.getElementById('dev-sub-size-val').textContent = e.target.value;
+            var style = document.createElement('style');
+            style.innerHTML = '.sub-word, .subtitle-text { font-size: ' + e.target.value + 'px !important; }';
+            document.head.appendChild(style);
+        });
+        document.getElementById('dev-sub-pos').addEventListener('input', function (e) {
+            document.getElementById('dev-sub-pos-val').textContent = e.target.value;
+            document.getElementById('subtitle-overlay').style.bottom = e.target.value + 'px';
+        });
+        document.getElementById('dev-sub-width').addEventListener('input', function (e) {
+            document.getElementById('dev-sub-width-val').textContent = e.target.value;
+            document.getElementById('subtitle-overlay').style.width = e.target.value + '%';
+        });
+        document.getElementById('dev-sub-mode').addEventListener('change', function (e) {
+            window.SUB_CONFIG.mode = e.target.value;
+            if (e.target.value === 'off') {
+                document.getElementById('subtitle-overlay').style.display = 'none';
+            }
+        });
+
+        // Avatar position controls (Shift+D panel)
+        document.getElementById('dev-av-right').addEventListener('input', function (e) {
+            document.getElementById('dev-av-right-val').textContent = e.target.value;
+            var av = document.getElementById('av-overlay');
+            if (av) { av.style.right = e.target.value + 'px'; }
+        });
+        document.getElementById('dev-av-bottom').addEventListener('input', function (e) {
+            document.getElementById('dev-av-bottom-val').textContent = e.target.value;
+            var av = document.getElementById('av-overlay');
+            if (av) { av.style.bottom = e.target.value + 'px'; }
+        });
+        document.getElementById('dev-av-sw').addEventListener('input', function (e) {
+            document.getElementById('dev-av-sw-val').textContent = e.target.value;
+            document.documentElement.style.setProperty('--av-strip-w', e.target.value + 'vw');
+        });
+        document.getElementById('dev-av-copy').addEventListener('click', function () {
+            var r = document.getElementById('dev-av-right').value;
+            var b = document.getElementById('dev-av-bottom').value;
+            var h = document.getElementById('dev-cont').value;
+            var sw = document.getElementById('dev-av-sw').value;
+            var txt = 'right:' + r + 'px; bottom:' + b + 'px; height:' + h + 'vh; --av-strip-w:' + sw + 'vw;';
+            navigator.clipboard.writeText(txt).catch(function () { });
+            var btn = this;
+            btn.textContent = 'Copied!';
+            setTimeout(function () { btn.textContent = 'Copy Avatar CSS'; }, 2000);
+        });
+
+        // ══════════════════════════════════════════════════════════
+        // ORIENTATION CHANGE — fix canvas + video dimensions
+        // ══════════════════════════════════════════════════════════
+        function handleOrientation() {
+            setTimeout(function () {
+                // Recalculate WebGL canvas dimensions
+                window.dispatchEvent(new Event('resize'));
+                // Force video decoders to re-evaluate frame size for new layout
+                ['wan-vid', 'manim-vid'].forEach(function (id) {
+                    var v = document.getElementById(id);
+                    if (!v || !v.src || v.paused) return;
+                    var t = v.currentTime;
+                    v.pause();
+                    setTimeout(function () {
+                        v.currentTime = t;
+                        v.play().catch(function () { });
+                    }, 80);
+                });
+            }, 150);
+        }
+        // Use both APIs — screen.orientation for modern browsers, orientationchange for older iOS
+        if (screen.orientation) {
+            screen.orientation.addEventListener('change', handleOrientation);
+        }
+        window.addEventListener('orientationchange', handleOrientation);
+
+
+        // ── SPLIT STACK: move av-overlay + subtitle into dock on mobile portrait ──
+        function initSplitStack() {
+            var isMobilePortrait = window.innerWidth <= 640 && window.innerHeight > window.innerWidth;
+            if (!isMobilePortrait) return;
+
+            var dock = document.getElementById('av-dock');
+            var sub = document.getElementById('subtitle-overlay');
+            if (!dock || !sub) return;
+
+            // Subtitle only — avatar stays fixed, overlays video zone as PiP
+            dock.appendChild(sub);
+        }
+
+        initSplitStack();
+
+    </script>
+</body>
+
+</html>

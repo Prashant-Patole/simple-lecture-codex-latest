@@ -1,0 +1,1 @@
+ALTER TABLE public.subject_topics ALTER COLUMN topic_number TYPE text USING topic_number::text;

@@ -1,0 +1,1 @@
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.coverage_analyzer_reports TO authenticated; GRANT ALL ON public.coverage_analyzer_reports TO service_role;

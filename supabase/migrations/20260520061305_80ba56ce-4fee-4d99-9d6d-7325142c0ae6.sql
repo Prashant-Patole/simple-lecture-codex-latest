@@ -1,0 +1,2 @@
+ALTER TABLE public.discount_codes ADD COLUMN IF NOT EXISTS course_id uuid REFERENCES public.courses(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_discount_codes_course_id ON public.discount_codes(course_id);

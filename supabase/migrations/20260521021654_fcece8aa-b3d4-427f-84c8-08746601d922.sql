@@ -1,0 +1,1 @@
+DELETE FROM enrollments WHERE id = '8e530bc5-f1c8-4b43-b9f8-1cbba3a37ac4';

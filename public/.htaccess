@@ -1,0 +1,75 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SimpleLecture — Apache config for the production SPA build.
+# This file is copied verbatim into dist/.htaccess by `vite build`.
+#
+# Requirements on the server:
+#   * mod_rewrite enabled
+#   * mod_headers enabled
+#   * mod_deflate enabled (recommended)
+#   * AllowOverride All on the document root
+# ─────────────────────────────────────────────────────────────────────────────
+
+Options -Indexes +FollowSymLinks
+
+# ── SPA fallback ────────────────────────────────────────────────────────────
+# 1. If a real file or directory exists at the requested path, serve it.
+#    This is what makes our prerendered /<route>/index.html files win over the
+#    SPA shell — they're real files on disk after `npm run build:seo`.
+# 2. Otherwise hand the request to /index.html so the SPA router takes over.
+RewriteEngine On
+
+# If the URL matches a directory that has an index.html (our prerendered
+# routes), rewrite to that file so Apache serves it.
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteCond %{REQUEST_FILENAME}/index.html -f
+RewriteRule ^(.*)$ $1/index.html [L]
+
+# Otherwise, if the path isn't a real file/dir, serve the SPA shell.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.html [L]
+
+# ── Caching ────────────────────────────────────────────────────────────────
+<IfModule mod_headers.c>
+  # Hashed assets — bust automatically on every build, safe to cache forever.
+  <FilesMatch "\.(js|css|woff2?|jpe?g|png|webp|svg|avif|ico|gif|mp4|webm)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+
+  # HTML — never cache so deploys roll out instantly.
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
+  </FilesMatch>
+
+  # robots.txt + sitemap — short cache, can be updated independently.
+  <FilesMatch "^(robots\.txt|sitemap\.xml)$">
+    Header set Cache-Control "public, max-age=3600"
+  </FilesMatch>
+
+  # Security headers.
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Frame-Options "SAMEORIGIN"
+</IfModule>
+
+# ── Compression ─────────────────────────────────────────────────────────────
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json application/xml image/svg+xml text/plain
+</IfModule>
+
+# ── Block hidden files ──────────────────────────────────────────────────────
+<FilesMatch "^\.">
+  Require all denied
+</FilesMatch>
+# Re-allow .well-known/ which some tools need (Let's Encrypt etc.)
+<DirectoryMatch "/\.well-known/">
+  Require all granted
+</DirectoryMatch>
+
+# ── MIME types Apache sometimes misses ──────────────────────────────────────
+<IfModule mod_mime.c>
+  AddType application/javascript .mjs
+  AddType application/manifest+json .webmanifest
+  AddType image/avif .avif
+</IfModule>

@@ -1,0 +1,1 @@
+UPDATE profiles SET phone_number = NULL WHERE id = '7256ba82-97c4-457c-9fa6-e2085958684d' AND phone_number = '9620652943';

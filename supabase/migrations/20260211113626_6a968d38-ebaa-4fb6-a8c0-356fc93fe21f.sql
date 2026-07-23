@@ -1,0 +1,1 @@
+ALTER TABLE public.question_images ADD CONSTRAINT question_images_storage_path_unique UNIQUE (storage_path);

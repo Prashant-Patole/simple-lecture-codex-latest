@@ -1,0 +1,1 @@
+UPDATE courses SET is_coming_soon = true WHERE id != '4c10bc8e-acbc-4b76-b7f5-54376c030cb0' AND (is_coming_soon IS NULL OR is_coming_soon = false);

@@ -1,0 +1,1 @@
+ALTER TABLE public.tests ALTER COLUMN created_by SET DEFAULT auth.uid();

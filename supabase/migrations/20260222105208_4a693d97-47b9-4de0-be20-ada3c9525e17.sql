@@ -1,0 +1,3 @@
+ALTER TABLE featured_courses DROP CONSTRAINT featured_courses_section_type_check;
+ALTER TABLE featured_courses ADD CONSTRAINT featured_courses_section_type_check CHECK (section_type = ANY (ARRAY['bestsellers'::text, 'top_courses'::text, 'most_popular'::text]));
+INSERT INTO featured_courses (course_id, section_type, display_order, is_active) VALUES ('4c10bc8e-acbc-4b76-b7f5-54376c030cb0', 'most_popular', 1, true);

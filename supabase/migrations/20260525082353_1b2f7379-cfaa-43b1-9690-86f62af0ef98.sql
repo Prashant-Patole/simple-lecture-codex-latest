@@ -1,0 +1,1 @@
+UPDATE public.courses SET is_coming_soon = true, price_inr = NULL, original_price_inr = NULL WHERE slug IN ('cbsc-class-10-complete-2026','cbsc-class-11-complete-2026','cbsc-class-12-complete-2026');

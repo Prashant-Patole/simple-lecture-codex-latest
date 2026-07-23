@@ -1,0 +1,1 @@
+ALTER TABLE public.kannada_queue_items ADD COLUMN IF NOT EXISTS topic_title text;

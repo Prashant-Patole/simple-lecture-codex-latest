@@ -1,0 +1,1 @@
+ALTER TABLE courses ADD COLUMN is_coming_soon boolean DEFAULT false;

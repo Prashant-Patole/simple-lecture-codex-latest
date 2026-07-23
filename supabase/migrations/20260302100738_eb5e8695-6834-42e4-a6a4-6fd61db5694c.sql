@@ -1,0 +1,1 @@
+ALTER TABLE phone_otp_verifications ADD COLUMN IF NOT EXISTS channel text NOT NULL DEFAULT 'sms';

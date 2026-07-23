@@ -1,0 +1,1 @@
+UPDATE public.courses SET price_inr = 0, original_price_inr = COALESCE(original_price_inr, 1000) WHERE id = 'e74e8e53-5949-4113-a565-1e84c2b4ee0e';

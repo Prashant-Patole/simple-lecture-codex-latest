@@ -1,0 +1,1 @@
+ALTER TABLE public.kannada_queue_items ALTER COLUMN video_job_id TYPE text USING video_job_id::text;

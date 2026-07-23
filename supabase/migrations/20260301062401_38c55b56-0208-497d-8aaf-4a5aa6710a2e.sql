@@ -1,0 +1,1 @@
+UPDATE payments SET status = 'failed' WHERE id = 'e943dd78-1560-4f29-b9ac-39a14b7524ce' AND status = 'pending';

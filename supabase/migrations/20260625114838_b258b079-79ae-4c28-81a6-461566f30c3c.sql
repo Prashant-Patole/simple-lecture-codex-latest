@@ -1,0 +1,1 @@
+ALTER TABLE public.video_generation_jobs ADD COLUMN IF NOT EXISTS target_port integer;

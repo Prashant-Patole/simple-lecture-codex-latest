@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.get_video_generation_coverage_report(text[]) TO authenticated;
