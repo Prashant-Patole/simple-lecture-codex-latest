@@ -1059,6 +1059,7 @@ export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '6
               ocr_provider: "local",
               avatar_language: "english",
               target_languages: ["kannada"],
+              ...(subjectName.trim().toLowerCase() === "science" ? { avatar_id: "avatar_877c54be" } : {}),
             }}
           />
         )}

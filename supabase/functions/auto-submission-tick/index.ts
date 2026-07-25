@@ -194,6 +194,7 @@ async function processRun(supabase: any, run: any) {
       if (cfg.image_provider) payload.image_provider = cfg.image_provider;
       if (cfg.image_model) payload.image_model = cfg.image_model;
       if (cfg.avatar_speaker) payload.avatar_speaker = cfg.avatar_speaker;
+      if (cfg.avatar_id) payload.avatar_id = cfg.avatar_id;
       if (cfg.model) payload.model = cfg.model;
       if (cfg.title) payload.title = cfg.title;
       if (cfg.target_languages) payload.target_languages = cfg.target_languages;

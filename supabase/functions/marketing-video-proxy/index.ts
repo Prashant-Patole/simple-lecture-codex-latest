@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
       document_url, file_name, markdown,
       subject, grade, job_prefix, title,
       tts_provider, pipeline_version, video_provider, image_provider, image_model,
-      no_quiz, avatar_speaker, avatar_language, ocr_provider, skip_threejs,
+      no_quiz, avatar_speaker, avatar_language, avatar_id, ocr_provider, skip_threejs,
       skip_wan, skip_avatar, dry_run, generation_scope, llm_routing,
       audio_only, model, target_languages, reel_with_avatar, reel_variant, story_hint,
     } = body;
@@ -211,6 +211,7 @@ Deno.serve(async (req) => {
       if (story_hint) fd.append("story_hint", String(story_hint));
       if (avatar_speaker) fd.append("avatar_speaker", String(avatar_speaker));
       if (avatar_language) fd.append("avatar_language", String(avatar_language));
+      if (avatar_id) fd.append("avatar_id", String(avatar_id));
       if (ocr_provider) fd.append("ocr_provider", String(ocr_provider));
       if (skip_threejs !== undefined) fd.append("skip_threejs", String(skip_threejs));
       if (llm_routing !== undefined) {
