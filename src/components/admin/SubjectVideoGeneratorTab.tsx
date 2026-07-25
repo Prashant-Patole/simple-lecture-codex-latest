@@ -1058,6 +1058,7 @@ export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '6
               video_provider: "kie",
               ocr_provider: "local",
               avatar_language: "english",
+              target_languages: ["kannada"],
             }}
           />
         )}
