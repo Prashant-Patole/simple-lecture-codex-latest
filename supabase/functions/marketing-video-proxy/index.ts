@@ -1,6 +1,6 @@
 // Marketing Video Proxy — isolated from lecture/reel video-generation-proxy.
 // Handles submit + status for the marketing pipeline only.
-// Default target: 204.12.237.78:5006, pipeline_version=v15_v2_director.
+// Default target: 204.12.237.78:5006, pipeline_version=v3_visual_first.
 // Changing this file MUST NOT affect ongoing lecture / reel jobs.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -192,7 +192,7 @@ Deno.serve(async (req) => {
       fd.append("subject", subject || "General Science");
       fd.append("grade", String(grade || "9"));
       fd.append("tts_provider", tts_provider || "edge_tts");
-      fd.append("pipeline_version", pipeline_version || "v15_v2_director");
+      fd.append("pipeline_version", pipeline_version || "v3_visual_first");
       fd.append("video_provider", video_provider || "kie");
       fd.append("image_provider", image_provider || "gpu");
       fd.append("image_model", image_model || "flux_dev");
