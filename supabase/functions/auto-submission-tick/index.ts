@@ -172,7 +172,7 @@ async function processRun(supabase: any, run: any) {
         server_ip: run.server_ip,
         target_port: targetPort,
         subject: run.subject_name,
-        grade: cfg.grade ?? "12",
+        grade: cfg.grade ?? (isMarketing ? "9" : "12"),
         job_prefix: jobPrefix,
         dry_run: false,
         skip_wan: false,
@@ -194,6 +194,13 @@ async function processRun(supabase: any, run: any) {
       if (cfg.image_provider) payload.image_provider = cfg.image_provider;
       if (cfg.image_model) payload.image_model = cfg.image_model;
       if (cfg.avatar_speaker) payload.avatar_speaker = cfg.avatar_speaker;
+      if (cfg.model) payload.model = cfg.model;
+      if (cfg.title) payload.title = cfg.title;
+      if (cfg.target_languages) payload.target_languages = cfg.target_languages;
+      if (cfg.reel_with_avatar !== undefined) payload.reel_with_avatar = cfg.reel_with_avatar;
+      if (cfg.reel_variant) payload.reel_variant = cfg.reel_variant;
+      if (cfg.story_hint) payload.story_hint = cfg.story_hint;
+      if (cfg.audio_only !== undefined) payload.audio_only = cfg.audio_only;
       if (item.sourceUrl) {
         payload.document_url = item.sourceUrl;
         payload.file_name = item.fileName;

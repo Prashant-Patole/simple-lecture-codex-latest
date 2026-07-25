@@ -1049,11 +1049,11 @@ export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '6
             pipelineConfig={{
               server_ip: "204.12.237.78",
               target_port: 5006,
-              pipeline_version: "v3_visual_first",
+              pipeline_version: "v15_v2_director",
               no_quiz: true,
               image_provider: "gpu",
               image_model: "flux_dev",
-              grade: "12",
+              grade: "9",
               tts_provider: "edge_tts",
               video_provider: "kie",
               ocr_provider: "local",

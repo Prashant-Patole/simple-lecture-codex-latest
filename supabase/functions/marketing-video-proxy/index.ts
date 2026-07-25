@@ -1,6 +1,6 @@
 // Marketing Video Proxy — isolated from lecture/reel video-generation-proxy.
 // Handles submit + status for the marketing pipeline only.
-// Default target: 204.12.237.78:5006, pipeline_version=v3_visual_first.
+// Default target: 204.12.237.78:5006, pipeline_version=v15_v2_director.
 // Changing this file MUST NOT affect ongoing lecture / reel jobs.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -11,6 +11,12 @@ const corsHeaders = {
 
 const DEFAULT_IP = "204.12.237.78";
 const DEFAULT_PORT = 5006;
+
+function normalizeTargetLanguages(value: unknown): string | null {
+  if (!value) return null;
+  if (Array.isArray(value)) return value.map(String).filter(Boolean).join(",");
+  return String(value);
+}
 
 const getMimeType = (name: string): string => {
   const ext = (name || "").split(".").pop()?.toLowerCase() || "";
@@ -154,10 +160,11 @@ Deno.serve(async (req) => {
     const {
       action, job_id, server_ip, target_port,
       document_url, file_name, markdown,
-      subject, grade, job_prefix,
+      subject, grade, job_prefix, title,
       tts_provider, pipeline_version, video_provider, image_provider, image_model,
       no_quiz, avatar_speaker, avatar_language, ocr_provider, skip_threejs,
       skip_wan, skip_avatar, dry_run, generation_scope, llm_routing,
+      audio_only, model, target_languages, reel_with_avatar, reel_variant, story_hint,
     } = body;
 
     const ip = server_ip || DEFAULT_IP;
@@ -182,18 +189,26 @@ Deno.serve(async (req) => {
 
       const fd = new FormData();
       fd.append("file", fileBlob, uploadName);
-      fd.append("subject", subject || "General");
-      if (grade) fd.append("grade", String(grade));
-      fd.append("tts_provider", tts_provider || "our_tts");
-      fd.append("pipeline_version", pipeline_version || "v3_visual_first");
+      fd.append("subject", subject || "General Science");
+      fd.append("grade", String(grade || "9"));
+      fd.append("tts_provider", tts_provider || "edge_tts");
+      fd.append("pipeline_version", pipeline_version || "v15_v2_director");
       fd.append("video_provider", video_provider || "kie");
       fd.append("image_provider", image_provider || "gpu");
       fd.append("image_model", image_model || "flux_dev");
       fd.append("skip_wan", String(skip_wan ?? false));
       fd.append("skip_avatar", String(skip_avatar ?? false));
+      fd.append("audio_only", String(audio_only ?? false));
       fd.append("dry_run", String(dry_run ?? false));
       fd.append("generation_scope", generation_scope || "full");
       fd.append("no_quiz", String(no_quiz ?? true));
+      if (model) fd.append("model", String(model));
+      if (title) fd.append("title", String(title));
+      const normalizedTargetLanguages = normalizeTargetLanguages(target_languages);
+      if (normalizedTargetLanguages) fd.append("target_languages", normalizedTargetLanguages);
+      if (reel_with_avatar !== undefined) fd.append("reel_with_avatar", String(reel_with_avatar));
+      if (reel_variant) fd.append("reel_variant", String(reel_variant));
+      if (story_hint) fd.append("story_hint", String(story_hint));
       if (avatar_speaker) fd.append("avatar_speaker", String(avatar_speaker));
       if (avatar_language) fd.append("avatar_language", String(avatar_language));
       if (ocr_provider) fd.append("ocr_provider", String(ocr_provider));
