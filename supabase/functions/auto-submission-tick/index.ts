@@ -185,7 +185,7 @@ async function processRun(supabase: any, run: any) {
         ocr_provider: cfg.ocr_provider ?? "local",
         skip_threejs: false,
         avatar_language: cfg.avatar_language ?? "english",
-        llm_routing: {
+        llm_routing: cfg.llm_routing ?? {
           chunker: "openrouter", director: "openrouter", manim_renderer: "openrouter",
           remotion_renderer: "openrouter", video_renderer: "openrouter", prompt_enhancer: "openrouter",
         },
