@@ -336,5 +336,8 @@ verify_jwt = false
 [functions.auto-submission-tick]
 verify_jwt = false
 
+[functions.marketing-video-proxy]
+verify_jwt = false
+
 [functions.v4-player-proxy]
 verify_jwt = false
