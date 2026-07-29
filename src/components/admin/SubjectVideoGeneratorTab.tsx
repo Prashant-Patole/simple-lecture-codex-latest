@@ -1071,7 +1071,9 @@ export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '6
                 ? { avatar_id: "avatar_877c54be" }
                 : subjectName.trim().toLowerCase() === "maths"
                   ? { avatar_id: "avatar_947bb537" }
-                  : {}),
+                  : subjectName.trim().toLowerCase() === "social science"
+                    ? { avatar_id: "avatar_5ab07dea" }
+                    : {}),
             }}
           />
         )}
