@@ -1063,9 +1063,9 @@ export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '6
                 chunker: "openrouter",
                 director: "openrouter",
                 manim_renderer: "openrouter",
-                remotion_renderer: "openrouter",
-                video_renderer: "openrouter",
-                prompt_enhancer: "openrouter",
+                remotion_renderer: "local",
+                video_renderer: "local",
+                prompt_enhancer: "local",
               },
               ...(subjectName.trim().toLowerCase() === "science"
                 ? { avatar_id: "avatar_877c54be" }
