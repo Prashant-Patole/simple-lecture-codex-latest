@@ -580,6 +580,7 @@ export const V4Player = ({ jobId, onClose, topicId, chapterId, subjectId, course
       return (
         <VimeoDirectPlayer
           presentation={presentation}
+          jobId={jobId}
           videoUrl={mergedForLang.url}
           onClose={onClose}
           topicId={topicId}
@@ -672,6 +673,7 @@ export const V4Player = ({ jobId, onClose, topicId, chapterId, subjectId, course
         onSectionClick={(i) => loadSection(i)}
         onClose={onClose}
         isMobile={isMobile}
+        notesId={jobId}
       />
 
       {availableLanguages.length > 1 && (

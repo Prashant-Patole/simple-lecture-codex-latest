@@ -4,11 +4,13 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useVideoCompletionTracker } from '@/hooks/useVideoCompletionTracker';
 import { V4CompletionDialog } from './V4CompletionDialog';
 import { ChapterTestReadyDialog } from '@/components/learning/ChapterTestReadyDialog';
+import { V4Notes } from './V4Notes';
 import type { V4Presentation } from './types';
 import './v4-player.css';
 
 interface Props {
   presentation: V4Presentation;
+  jobId: string;
   videoUrl: string;
   onClose: () => void;
   topicId?: string;
@@ -30,6 +32,7 @@ interface Props {
  */
 export const VimeoDirectPlayer = ({
   presentation,
+  jobId,
   videoUrl,
   onClose,
   topicId,
@@ -117,6 +120,7 @@ export const VimeoDirectPlayer = ({
       {/* Minimal top bar: close + title */}
       <div className="v4-topbar" style={{ pointerEvents: 'auto' }}>
         <button className="v4-close-btn" onClick={onClose} title="Close">✕</button>
+        <V4Notes notesId={jobId} />
         <div className="v4-tb-title">{title}</div>
       </div>
 

@@ -246,6 +246,7 @@ export const V4MergedPlayer = ({
         isMobile={isMobile}
         hideDots
         hideSectionName
+        notesId={jobId}
       />
 
       <div className="v4-main v4-main--fullscreen">
