@@ -144,6 +144,7 @@ const WatchRecording = lazyWithRetry(() => import("./pages/WatchRecording"));
 const Recordings = lazyWithRetry(() => import("./pages/Recordings"));
 const V3PlayerPage = lazyWithRetry(() => import("./pages/V3PlayerPage"));
 const V4PlayerPage = lazyWithRetry(() => import("./pages/V4PlayerPage"));
+const V5PlayerPage = lazyWithRetry(() => import("./pages/V5PlayerPage"));
 const V3TrialPage = lazyWithRetry(() => import("./pages/V3TrialPage"));
 
 // Forum & Support pages
@@ -343,6 +344,7 @@ const App = () => (
                 <Route path="/recordings" element={<Recordings />} />
                 <Route path="/v3-player" element={<V3PlayerPage />} />
                 <Route path="/v4-player" element={<V4PlayerPage />} />
+                <Route path="/v5-player" element={<V5PlayerPage />} />
                 <Route path="/v3-trial" element={<V3TrialPage />} />
                 <Route path="/watch/:recordingId" element={<WatchRecording />} />
                 
