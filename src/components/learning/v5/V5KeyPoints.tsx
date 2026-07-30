@@ -1,18 +1,40 @@
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import { Eye, EyeOff } from 'lucide-react';
 import type { V5TimelineSection } from './types';
 import 'katex/dist/katex.min.css';
 
 interface V5KeyPointsProps {
   active: V5TimelineSection | null;
+  isHidden: boolean;
+  onToggle: () => void;
   visibleCount: number;
 }
 
-export function V5KeyPoints({ active, visibleCount }: V5KeyPointsProps) {
+export function V5KeyPoints({
+  active,
+  isHidden,
+  onToggle,
+  visibleCount,
+}: V5KeyPointsProps) {
   if (!active || active.keyPoints.length === 0 || visibleCount === 0) return null;
 
   const isManim = active.section.renderer?.toLowerCase() === 'manim';
+
+  if (isHidden) {
+    return (
+      <button
+        aria-label="Show key points"
+        className="v5-keypoints-toggle"
+        onClick={onToggle}
+        type="button"
+      >
+        <Eye size={16} />
+        <span>Show key points</span>
+      </button>
+    );
+  }
 
   return (
     <aside
@@ -20,8 +42,14 @@ export function V5KeyPoints({ active, visibleCount }: V5KeyPointsProps) {
       aria-live="polite"
     >
       <div className="v5-keypoints__eyebrow">
-        <span className="v5-keypoints__pulse" />
-        Key points
+        <span className="v5-keypoints__label">
+          <span className="v5-keypoints__pulse" />
+          Key points
+        </span>
+        <button aria-label="Hide key points" onClick={onToggle} type="button">
+          <EyeOff size={15} />
+          <span>Hide</span>
+        </button>
       </div>
       <div className="v5-keypoints__list">
         {active.keyPoints.slice(0, visibleCount).map((point, index) => (
@@ -39,4 +67,3 @@ export function V5KeyPoints({ active, visibleCount }: V5KeyPointsProps) {
     </aside>
   );
 }
-

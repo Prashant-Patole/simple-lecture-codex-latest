@@ -141,15 +141,19 @@
 
 .v5-keypoints {
   position: absolute;
+  z-index: 3;
   left: clamp(14px, 3vw, 46px);
   top: 50%;
   width: min(430px, 38vw);
   max-height: 74%;
   padding: 16px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  touch-action: pan-y;
   border-left: 3px solid #60a5fa;
   border-radius: 0 12px 12px 0;
-  pointer-events: none;
+  pointer-events: auto;
   transform: translateY(-50%);
   animation: v5-panel-in 360ms ease-out both;
   backdrop-filter: blur(6px);
@@ -164,14 +168,63 @@
 }
 
 .v5-keypoints__eyebrow {
+  position: sticky;
+  z-index: 2;
+  top: -16px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  padding: 12px 0 10px;
   margin-bottom: 13px;
   color: #9dc9ff;
+  background: linear-gradient(180deg, rgba(4, 10, 18, 0.98) 75%, transparent);
   font: 700 10px/1 "Cascadia Mono", monospace;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+
+.v5-keypoints__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.v5-keypoints__eyebrow button,
+.v5-keypoints-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(157, 201, 255, 0.25);
+  color: #dbeafe;
+  background: rgba(10, 20, 30, 0.84);
+  font: 700 9px/1 "Cascadia Mono", monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.v5-keypoints__eyebrow button {
+  padding: 7px 9px;
+  border-radius: 7px;
+}
+
+.v5-keypoints__eyebrow button:hover,
+.v5-keypoints-toggle:hover {
+  border-color: rgba(124, 224, 195, 0.58);
+  color: var(--v5-mint);
+  background: rgba(22, 46, 41, 0.94);
+}
+
+.v5-keypoints-toggle {
+  position: absolute;
+  z-index: 3;
+  left: clamp(14px, 3vw, 46px);
+  top: 50%;
+  padding: 11px 13px;
+  border-left: 3px solid #60a5fa;
+  border-radius: 0 9px 9px 0;
+  transform: translateY(-50%);
+  backdrop-filter: blur(6px);
 }
 
 .v5-keypoints__pulse {
@@ -453,7 +506,15 @@
   }
 
   .v5-keypoints__eyebrow {
+    top: -11px;
     margin-bottom: 8px;
+  }
+
+  .v5-keypoints-toggle {
+    left: 12px;
+    top: auto;
+    bottom: 28px;
+    transform: none;
   }
 
   .v5-controls {
@@ -468,4 +529,3 @@
     animation: none;
   }
 }
-

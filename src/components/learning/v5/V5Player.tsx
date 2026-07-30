@@ -42,6 +42,7 @@ export function V5Player({
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [needsTap, setNeedsTap] = useState(false);
+  const [keyPointsHidden, setKeyPointsHidden] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -241,7 +242,12 @@ export function V5Player({
         />
 
         <div className="v5-stage__shade" />
-        <V5KeyPoints active={position.active} visibleCount={position.visibleCount} />
+        <V5KeyPoints
+          active={position.active}
+          isHidden={keyPointsHidden}
+          onToggle={() => setKeyPointsHidden((hidden) => !hidden)}
+          visibleCount={position.visibleCount}
+        />
 
         {needsTap && (
           <button className="v5-tap" onClick={togglePlay} type="button">
