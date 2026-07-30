@@ -18,7 +18,6 @@ interface V5PlayerProps {
   initialLanguage?: V5Language;
   onExit: () => void;
   onLanguageChange?: (language: V5Language) => void;
-  exitLabel?: string;
 }
 
 export function V5Player({
@@ -26,7 +25,6 @@ export function V5Player({
   initialLanguage = 'english',
   onExit,
   onLanguageChange,
-  exitLabel = 'Choose another job',
 }: V5PlayerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -173,7 +171,7 @@ export function V5Player({
       <div className="v5-state">
         <span className="v5-state__code">V5 / LOAD ERROR</span>
         <strong>{error || 'Presentation unavailable'}</strong>
-        <button onClick={onExit} type="button">{exitLabel}</button>
+        <button onClick={onExit} type="button">Choose another job</button>
       </div>
     );
   }
@@ -183,7 +181,7 @@ export function V5Player({
       <div className="v5-state">
         <span className="v5-state__code">V5 / NO MERGED VIDEO</span>
         <strong>No {language} final presentation was found.</strong>
-        <button onClick={onExit} type="button">{exitLabel}</button>
+        <button onClick={onExit} type="button">Choose another job</button>
       </div>
     );
   }
@@ -194,7 +192,7 @@ export function V5Player({
   return (
     <div className="v5-player" ref={rootRef}>
       <header className="v5-header">
-        <button className="v5-header__back" onClick={onExit} title={exitLabel} type="button">
+        <button className="v5-header__back" onClick={onExit} title="Choose another job" type="button">
           <ArrowLeft size={19} />
         </button>
         <div className="v5-header__identity">

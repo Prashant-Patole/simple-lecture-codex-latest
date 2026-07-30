@@ -164,4 +164,3 @@ export function formatV5Time(seconds: number): string {
   const remainder = Math.floor(seconds % 60);
   return `${minutes}:${String(remainder).padStart(2, '0')}`;
 }
-

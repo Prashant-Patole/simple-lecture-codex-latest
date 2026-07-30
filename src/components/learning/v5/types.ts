@@ -53,4 +53,3 @@ export interface V5TimelineSection {
   duration: number;
   keyPoints: string[];
 }
-
