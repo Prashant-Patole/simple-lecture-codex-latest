@@ -219,11 +219,10 @@
   position: absolute;
   z-index: 3;
   left: clamp(14px, 3vw, 46px);
-  top: 50%;
+  top: 18px;
   padding: 11px 13px;
   border-left: 3px solid #60a5fa;
   border-radius: 0 9px 9px 0;
-  transform: translateY(-50%);
   backdrop-filter: blur(6px);
 }
 
@@ -512,9 +511,8 @@
 
   .v5-keypoints-toggle {
     left: 12px;
-    top: auto;
-    bottom: 28px;
-    transform: none;
+    top: 12px;
+    bottom: auto;
   }
 
   .v5-controls {
