@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EducationalVideoPlayerDialog } from "./player/EducationalVideoPlayerDialog";
 import { V4PlayerDialog } from "./V4PlayerDialog";
+import { V5PlayerDialog } from "./V5PlayerDialog";
 
 import { extractJobIdFromUrl } from "./player/utils/mediaResolver";
 import { useLanguageTopupStatus } from "@/hooks/useLanguageTopup";
@@ -376,7 +377,11 @@ export const RecordedVideos = ({
   useEffect(() => {
     if (!watchingLecture) return;
     logPreviewReplay('player-open-branch', {
-      branch: watchingLecture.external_job_id ? 'v4-player' : 'educational-player',
+      branch: watchingLecture.is_marketing
+        ? 'v5-player'
+        : watchingLecture.external_job_id && isV4EligibleChapter(chapterNumber)
+          ? 'v4-player'
+          : 'educational-player',
       lectureId: watchingLecture.id,
       externalJobId: watchingLecture.external_job_id,
       courseId,
@@ -666,7 +671,30 @@ export const RecordedVideos = ({
 
       {/* AI Lecture Player Dialog - For published lectures from jobs */}
       {watchingLecture && (
-        watchingLecture.external_job_id && isV4EligibleChapter(chapterNumber) ? (
+        watchingLecture.is_marketing && watchingLecture.external_job_id ? (
+          <V5PlayerDialog
+            open={!!watchingLecture}
+            onOpenChange={(open) => {
+              if (!open) {
+                if (lectureStartTimeRef.current && currentLectureTitleRef.current) {
+                  const secondsWatched = Math.floor((Date.now() - lectureStartTimeRef.current) / 1000);
+                  if (secondsWatched > 0) {
+                    updateWatchTime.mutate({
+                      videoTitle: currentLectureTitleRef.current,
+                      additionalSeconds: secondsWatched,
+                    });
+                  }
+                  lectureStartTimeRef.current = null;
+                  currentLectureTitleRef.current = null;
+                }
+                setWatchingLectureId(null);
+                setActiveAILanguage(null);
+              }
+            }}
+            initialJobId={watchingLecture.external_job_id}
+            initialLanguage={activeAILanguage ?? selectedAILanguage}
+          />
+        ) : watchingLecture.external_job_id && isV4EligibleChapter(chapterNumber) ? (
           <V4PlayerDialog
             open={!!watchingLecture}
             onOpenChange={(open) => {
