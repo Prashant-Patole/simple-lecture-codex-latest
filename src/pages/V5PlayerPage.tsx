@@ -63,7 +63,7 @@ export default function V5PlayerPage() {
             </button>
           </div>
         </form>
-        <small>No login required · Text overlays only · No separate media layers</small>
+        <small>No login required / Text overlays only / No separate media layers</small>
       </section>
       <style>{`
         .v5-launcher {
@@ -178,4 +178,3 @@ export default function V5PlayerPage() {
     </main>
   );
 }
-
