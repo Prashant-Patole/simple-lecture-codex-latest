@@ -247,6 +247,9 @@ export const V4MergedPlayer = ({
         hideDots
         hideSectionName
         notesId={jobId}
+        subjectId={subjectId}
+        chapterId={chapterId}
+        topicId={topicId}
       />
 
       <div className="v4-main v4-main--fullscreen">

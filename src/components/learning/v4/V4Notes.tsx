@@ -1,8 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { BookOpen, GripHorizontal, Trash2, X } from 'lucide-react';
+import {
+  BookOpen,
+  Check,
+  GripHorizontal,
+  LoaderCircle,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 interface V4NotesProps {
   notesId: string;
+  subjectId?: string;
+  chapterId?: string;
+  topicId?: string;
 }
 
 interface DragState {
@@ -12,26 +25,209 @@ interface DragState {
   panelY: number;
 }
 
-const getStorageKey = (notesId: string) => `simplelecture:v4-notes:${notesId}`;
+interface SpellingCorrection {
+  original: string;
+  replacement: string;
+  reason: string;
+}
 
-export function V4Notes({ notesId }: V4NotesProps) {
+interface SpellcheckResult {
+  corrected_text: string;
+  corrections: SpellingCorrection[];
+}
+
+type SaveStatus = 'local' | 'loading' | 'saving' | 'saved' | 'error';
+
+const getStorageKey = (notesId: string, userId?: string) =>
+  `simplelecture:v4-notes:${userId || 'guest'}:${notesId}`;
+
+const matchesContext = (
+  row: Record<string, unknown>,
+  notesId: string,
+  subjectId?: string,
+  chapterId?: string,
+  topicId?: string,
+) =>
+  row.job_id === notesId &&
+  (row.subject_id || null) === (subjectId || null) &&
+  (row.chapter_id || null) === (chapterId || null) &&
+  (row.topic_id || null) === (topicId || null);
+
+export function V4Notes({
+  notesId,
+  subjectId,
+  chapterId,
+  topicId,
+}: V4NotesProps) {
+  const { user } = useAuth();
   const panelRef = useRef<HTMLElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const saveTimerRef = useRef<number | null>(null);
+  const spellTimerRef = useRef<number | null>(null);
+  const latestNotesRef = useRef('');
+  const hasLocalChangesRef = useRef(false);
+  const persistNoteRef = useRef<(content: string) => Promise<void>>(async () => {});
+  const spellRequestRef = useRef(0);
+  const lastCheckedTextRef = useRef('');
   const [isOpen, setIsOpen] = useState(false);
   const [notes, setNotes] = useState('');
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('local');
+  const [isChecking, setIsChecking] = useState(false);
+  const [spellcheck, setSpellcheck] = useState<SpellcheckResult | null>(null);
   const [position, setPosition] = useState(() => ({
     x: Math.max(16, window.innerWidth - 430),
     y: 68,
   }));
 
-  useEffect(() => {
-    try {
-      setNotes(localStorage.getItem(getStorageKey(notesId)) || '');
-    } catch {
-      setNotes('');
+  const storageKey = getStorageKey(notesId, user?.id);
+
+  const persistNote = async (content: string) => {
+    if (!user) {
+      setSaveStatus('local');
+      return;
     }
-  }, [notesId]);
+
+    setSaveStatus('saving');
+    const { error } = await supabase
+      .from('student_lecture_notes')
+      .upsert(
+        {
+          student_id: user.id,
+          job_id: notesId,
+          subject_id: subjectId || null,
+          chapter_id: chapterId || null,
+          topic_id: topicId || null,
+          content,
+        },
+        {
+          onConflict: 'student_id,job_id,subject_id,chapter_id,topic_id',
+        },
+      );
+
+    if (error) {
+      console.error('[V4Notes] autosave failed', error);
+      setSaveStatus('error');
+      return;
+    }
+
+    hasLocalChangesRef.current = false;
+    setSaveStatus('saved');
+  };
+  persistNoteRef.current = persistNote;
+
+  const scheduleSave = (content: string) => {
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    setSaveStatus(user ? 'saving' : 'local');
+    saveTimerRef.current = window.setTimeout(() => {
+      persistNote(content);
+    }, 450);
+  };
+
+  const updateNotes = (value: string) => {
+    setNotes(value);
+    latestNotesRef.current = value;
+    hasLocalChangesRef.current = true;
+    setSpellcheck(null);
+    try {
+      localStorage.setItem(storageKey, value);
+    } catch {
+      // Keep the current session usable when browser storage is unavailable.
+    }
+    scheduleSave(value);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    hasLocalChangesRef.current = false;
+    setSpellcheck(null);
+    setSaveStatus(user ? 'loading' : 'local');
+
+    let cached = '';
+    try {
+      cached =
+        localStorage.getItem(storageKey) ||
+        localStorage.getItem(`simplelecture:v4-notes:${notesId}`) ||
+        '';
+    } catch {
+      cached = '';
+    }
+    setNotes(cached);
+    latestNotesRef.current = cached;
+
+    if (!user) return;
+
+    const loadRemoteNote = async () => {
+      let query = supabase
+        .from('student_lecture_notes')
+        .select('content, updated_at')
+        .eq('student_id', user.id)
+        .eq('job_id', notesId);
+
+      query = subjectId ? query.eq('subject_id', subjectId) : query.is('subject_id', null);
+      query = chapterId ? query.eq('chapter_id', chapterId) : query.is('chapter_id', null);
+      query = topicId ? query.eq('topic_id', topicId) : query.is('topic_id', null);
+
+      const { data, error } = await query.maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        console.error('[V4Notes] load failed', error);
+        setSaveStatus('error');
+        return;
+      }
+
+      if (data && !hasLocalChangesRef.current) {
+        setNotes(data.content);
+        latestNotesRef.current = data.content;
+        try {
+          localStorage.setItem(storageKey, data.content);
+        } catch {
+          // The database copy remains available when local storage is blocked.
+        }
+      } else if (!data && cached) {
+        await persistNote(cached);
+        return;
+      }
+      setSaveStatus('saved');
+    };
+
+    loadRemoteNote();
+
+    const channel = supabase
+      .channel(`student-lecture-note-${user.id}-${notesId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'student_lecture_notes',
+          filter: `student_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const row = (payload.new || {}) as Record<string, unknown>;
+          if (
+            !hasLocalChangesRef.current &&
+            matchesContext(row, notesId, subjectId, chapterId, topicId)
+          ) {
+            const content = String(row.content || '');
+            setNotes(content);
+            latestNotesRef.current = content;
+            try {
+              localStorage.setItem(storageKey, content);
+            } catch {
+              // Realtime sync still works without local storage.
+            }
+            setSaveStatus('saved');
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [user, notesId, subjectId, chapterId, topicId, storageKey]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -39,14 +235,55 @@ export function V4Notes({ notesId }: V4NotesProps) {
     return () => window.cancelAnimationFrame(frame);
   }, [isOpen]);
 
-  const updateNotes = (value: string) => {
-    setNotes(value);
-    try {
-      localStorage.setItem(getStorageKey(notesId), value);
-    } catch {
-      // Keep the current session usable when browser storage is unavailable.
+  useEffect(() => {
+    if (spellTimerRef.current) window.clearTimeout(spellTimerRef.current);
+    const text = notes;
+    if (!user || text.trim().length < 8 || text === lastCheckedTextRef.current) {
+      setIsChecking(false);
+      return;
     }
-  };
+
+    setIsChecking(true);
+    const requestId = ++spellRequestRef.current;
+    spellTimerRef.current = window.setTimeout(async () => {
+      const { data, error } = await supabase.functions.invoke('student-note-spellcheck', {
+        body: { text },
+      });
+      if (requestId !== spellRequestRef.current) return;
+      setIsChecking(false);
+      lastCheckedTextRef.current = text;
+
+      if (error) {
+        console.warn('[V4Notes] spellcheck unavailable', error);
+        return;
+      }
+
+      const result = data as SpellcheckResult;
+      setSpellcheck(
+        result?.corrected_text &&
+          result.corrected_text !== text &&
+          Array.isArray(result.corrections) &&
+          result.corrections.length
+          ? result
+          : null,
+      );
+    }, 1200);
+
+    return () => {
+      if (spellTimerRef.current) window.clearTimeout(spellTimerRef.current);
+    };
+  }, [notes, user]);
+
+  useEffect(
+    () => () => {
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+      if (spellTimerRef.current) window.clearTimeout(spellTimerRef.current);
+      if (hasLocalChangesRef.current) {
+        void persistNoteRef.current(latestNotesRef.current);
+      }
+    },
+    [],
+  );
 
   const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
@@ -62,6 +299,14 @@ export function V4Notes({ notesId }: V4NotesProps) {
       y: Math.max(54, Math.min(window.innerHeight - panelHeight - 8, nextY)),
     });
   };
+
+  const saveLabel = {
+    local: 'Saved on this device',
+    loading: 'Loading saved notes...',
+    saving: 'Saving to your account...',
+    saved: 'Saved to your account',
+    error: 'Saved locally - cloud sync will retry',
+  }[saveStatus];
 
   return (
     <>
@@ -123,6 +368,8 @@ export function V4Notes({ notesId }: V4NotesProps) {
           <div className="v4-notes__paper">
             <textarea
               aria-label="Write your lecture notes"
+              autoCapitalize="sentences"
+              autoCorrect="on"
               onChange={(event) => updateNotes(event.target.value)}
               placeholder="Write your notes here..."
               ref={textareaRef}
@@ -131,8 +378,58 @@ export function V4Notes({ notesId }: V4NotesProps) {
             />
           </div>
 
+          {(isChecking || spellcheck) && (
+            <section className="v4-notes__spellcheck" aria-live="polite">
+              <div className="v4-notes__spellcheck-title">
+                {isChecking ? (
+                  <>
+                    <LoaderCircle className="is-spinning" size={14} />
+                    Checking spelling...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={14} />
+                    Suggested corrections
+                  </>
+                )}
+              </div>
+              {spellcheck && (
+                <>
+                  <div className="v4-notes__corrections">
+                    {spellcheck.corrections.slice(0, 4).map((correction, index) => (
+                      <span key={`${correction.original}-${index}`}>
+                        <s>{correction.original}</s>
+                        <b>{correction.replacement}</b>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="v4-notes__spellcheck-actions">
+                    <button
+                      onClick={() => {
+                        lastCheckedTextRef.current = spellcheck.corrected_text;
+                        updateNotes(spellcheck.corrected_text);
+                        setSpellcheck(null);
+                      }}
+                      type="button"
+                    >
+                      <Check size={13} />
+                      Apply correction
+                    </button>
+                    <button onClick={() => setSpellcheck(null)} type="button">
+                      Ignore
+                    </button>
+                  </div>
+                </>
+              )}
+            </section>
+          )}
+
           <footer className="v4-notes__footer">
-            <span>Saved automatically on this device</span>
+            <span className={`v4-notes__save-status is-${saveStatus}`}>
+              {saveStatus === 'saving' && <LoaderCircle className="is-spinning" size={12} />}
+              {saveStatus === 'saved' && <Check size={12} />}
+              {saveLabel}
+            </span>
             {notes && (
               <button onClick={() => updateNotes('')} title="Clear notes" type="button">
                 <Trash2 size={14} />

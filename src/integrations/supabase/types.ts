@@ -6042,6 +6042,64 @@ export type Database = {
           },
         ]
       }
+      student_lecture_notes: {
+        Row: {
+          chapter_id: string | null
+          content: string
+          created_at: string
+          id: string
+          job_id: string
+          student_id: string
+          subject_id: string | null
+          topic_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          chapter_id?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          job_id: string
+          student_id: string
+          subject_id?: string | null
+          topic_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          chapter_id?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          job_id?: string
+          student_id?: string
+          subject_id?: string | null
+          topic_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_lecture_notes_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "subject_chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_lecture_notes_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "popular_subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_lecture_notes_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "subject_topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_activity_log: {
         Row: {
           activity_type: Database["public"]["Enums"]["activity_type"]

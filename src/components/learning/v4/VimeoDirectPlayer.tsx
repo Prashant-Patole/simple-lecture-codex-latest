@@ -120,7 +120,12 @@ export const VimeoDirectPlayer = ({
       {/* Minimal top bar: close + title */}
       <div className="v4-topbar" style={{ pointerEvents: 'auto' }}>
         <button className="v4-close-btn" onClick={onClose} title="Close">✕</button>
-        <V4Notes notesId={jobId} />
+        <V4Notes
+          notesId={jobId}
+          subjectId={subjectId}
+          chapterId={chapterId}
+          topicId={topicId}
+        />
         <div className="v4-tb-title">{title}</div>
       </div>
 

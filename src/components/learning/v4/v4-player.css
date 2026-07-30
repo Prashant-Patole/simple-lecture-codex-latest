@@ -203,7 +203,7 @@
 .v4-notes__paper {
   min-height: 0;
   flex: 1;
-  padding: 12px 20px 12px 43px;
+  padding: 8px 20px 12px 43px;
   background:
     linear-gradient(90deg, transparent 29px, rgba(201, 77, 72, 0.28) 30px, transparent 31px),
     repeating-linear-gradient(180deg, #fbf4dc 0, #fbf4dc 29px, rgba(84, 126, 157, 0.22) 30px);
@@ -223,6 +223,80 @@
 
 .v4-notes__paper textarea::placeholder {
   color: rgba(41, 55, 67, 0.42);
+}
+
+.v4-notes__spellcheck {
+  padding: 9px 12px;
+  border-top: 1px solid rgba(91, 64, 34, 0.14);
+  color: #4b3927;
+  background: #f4e8be;
+}
+
+.v4-notes__spellcheck-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #775723;
+  font: 700 10px/1.2 'Sora', sans-serif;
+}
+
+.v4-notes__corrections {
+  margin-top: 7px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.v4-notes__corrections span {
+  padding: 4px 7px;
+  border: 1px solid rgba(117, 78, 28, 0.15);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.42);
+  font: 600 10px/1.2 'Sora', sans-serif;
+}
+
+.v4-notes__corrections s {
+  color: #a6504a;
+}
+
+.v4-notes__corrections b {
+  color: #2c785c;
+}
+
+.v4-notes__spellcheck-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+.v4-notes__spellcheck-actions button {
+  min-height: 27px;
+  padding: 0 9px;
+  border: 1px solid rgba(77, 98, 61, 0.18);
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #315b48;
+  background: rgba(255, 255, 255, 0.46);
+  font: 700 9px/1 'Sora', sans-serif;
+  cursor: pointer;
+}
+
+.v4-notes__spellcheck-actions button:last-child {
+  color: #775f47;
+  background: transparent;
+}
+
+.v4-notes .is-spinning {
+  animation: v4-notes-spin 800ms linear infinite;
+}
+
+@keyframes v4-notes-spin {
+  to { transform: rotate(360deg); }
 }
 
 .v4-notes__footer {
@@ -248,6 +322,20 @@
   background: transparent;
   font: 700 10px/1 'Sora', sans-serif;
   cursor: pointer;
+}
+
+.v4-notes__save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.v4-notes__save-status.is-saved {
+  color: #367057;
+}
+
+.v4-notes__save-status.is-error {
+  color: #9a4f45;
 }
 
 .v4-main {

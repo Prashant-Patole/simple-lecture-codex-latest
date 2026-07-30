@@ -13,9 +13,12 @@ interface V4TopBarProps {
   hideDots?: boolean;
   hideSectionName?: boolean;
   notesId: string;
+  subjectId?: string;
+  chapterId?: string;
+  topicId?: string;
 }
 
-export const V4TopBar = ({ title, sections, currentIndex, onSectionClick, onClose, isMobile, hideDots, hideSectionName, notesId }: V4TopBarProps) => {
+export const V4TopBar = ({ title, sections, currentIndex, onSectionClick, onClose, isMobile, hideDots, hideSectionName, notesId, subjectId, chapterId, topicId }: V4TopBarProps) => {
   const currentSection = sections[currentIndex];
   const sectionType = currentSection ? getSectionType(currentSection) : 'content';
   const badge = BADGE_CONFIG[sectionType] || BADGE_CONFIG.content;
@@ -25,7 +28,12 @@ export const V4TopBar = ({ title, sections, currentIndex, onSectionClick, onClos
       <button className="v4-close-btn" onClick={onClose} title="Close">
         ✕
       </button>
-      <V4Notes notesId={notesId} />
+      <V4Notes
+        notesId={notesId}
+        subjectId={subjectId}
+        chapterId={chapterId}
+        topicId={topicId}
+      />
       <div
         className="v4-tb-badge"
         style={{

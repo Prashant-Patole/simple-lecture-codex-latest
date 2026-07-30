@@ -674,6 +674,9 @@ export const V4Player = ({ jobId, onClose, topicId, chapterId, subjectId, course
         onClose={onClose}
         isMobile={isMobile}
         notesId={jobId}
+        subjectId={subjectId}
+        chapterId={chapterId}
+        topicId={topicId}
       />
 
       {availableLanguages.length > 1 && (
