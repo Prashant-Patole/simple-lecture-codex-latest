@@ -602,22 +602,18 @@
 }
 
 .notes-paper-head {
-  position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  gap: 14px;
   min-height: 72px;
-  padding: 16px 76px;
+  padding: 16px 26px 16px 34px;
   border-bottom: 1px solid rgba(111, 74, 36, 0.16);
   background: linear-gradient(90deg, #f4ddb1, #f8e9c9);
-  text-align: center;
+  text-align: left;
 }
 
 .notes-paper-icon {
-  position: absolute;
-  left: 30px;
-  top: 50%;
-  transform: translateY(-50%);
   display: grid;
   place-items: center;
   width: 36px;
@@ -632,7 +628,7 @@
   color: #5c3b1c;
   font-family: 'Fraunces', serif;
   font-size: 17px;
-  text-align: center;
+  text-align: left;
 }
 
 .notes-paper-head span {
@@ -643,7 +639,7 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  text-align: center;
+  text-align: left;
 }
 
 .notes-paper-body {
@@ -927,11 +923,10 @@
 
   .notes-paper-head {
     min-height: 68px;
-    padding: 13px 54px;
+    padding: 13px 16px 13px 22px;
   }
 
   .notes-paper-icon {
-    left: 16px;
     width: 32px;
     height: 32px;
   }

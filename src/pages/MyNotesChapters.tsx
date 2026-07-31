@@ -33,6 +33,11 @@ const getAggregatedJobId = (subjectId: string, chapterId: string) =>
 const getStorageKey = (subjectId: string, chapterId: string, userId: string) =>
   `simplelecture:my-notes:${userId}:${subjectId}:${chapterId}`;
 
+const formatTopicSections = (content: string) =>
+  content
+    .replace(/^---\s*(.+?)\s*---$/gm, 'Topic: $1')
+    .replace(/^(Topic:[^\n]+)\n+(?=\S)/gm, '$1\n\n\n');
+
 type SaveStatus = 'local' | 'loading' | 'saving' | 'saved' | 'error';
 
 const MyNotesChapters = () => {
@@ -214,10 +219,7 @@ const MyNotesChapters = () => {
         !!topicNotes?.length && (!aggregateNote?.content || latestTopicUpdate > aggregateUpdate);
 
       if (aggregateNote?.content && !shouldRebuildFromTopics) {
-        const normalizedContent = aggregateNote.content.replace(
-          /^---\s*(.+?)\s*---$/gm,
-          'Topic: $1',
-        );
+        const normalizedContent = formatTopicSections(aggregateNote.content);
         setNotes(normalizedContent);
         latestNotesRef.current = normalizedContent;
         try {
@@ -239,9 +241,7 @@ const MyNotesChapters = () => {
 
         const topicMap = new Map<string, string>();
         (topics || []).forEach((topic) => topicMap.set(topic.id, topic.title));
-        const existingAggregate = (aggregateNote?.content || '')
-          .replace(/^---\s*(.+?)\s*---$/gm, 'Topic: $1')
-          .trim();
+        const existingAggregate = formatTopicSections(aggregateNote?.content || '').trim();
         const notesByTopic = new Map<string, string[]>();
         topicNotes.forEach((note) => {
           const noteContent = note.content.trim();
@@ -254,7 +254,7 @@ const MyNotesChapters = () => {
         const newTopicSections = Array.from(notesByTopic.entries())
           .map(([topicId, topicContents]) => {
             const topicTitle = topicMap.get(topicId) || 'Lecture notes';
-            return `Topic: ${topicTitle}\n${topicContents.join('\n\n')}`;
+            return `Topic: ${topicTitle}\n\n\n${topicContents.join('\n\n')}`;
           });
         const aggregated = [existingAggregate, ...newTopicSections]
           .filter(Boolean)
