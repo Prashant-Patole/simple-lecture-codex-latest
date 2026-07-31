@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -324,6 +324,13 @@ const TopicNotes = ({ topic }: { topic: ImportantTopicNotes }) => {
   );
   const page = pages[pageIndex];
 
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      bookRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [topic.topic_note_id]);
+
   const turnPage = (nextIndex: number) => {
     if (nextIndex < 0 || nextIndex >= pages.length || nextIndex === pageIndex) return;
     setTurnDirection(nextIndex > pageIndex ? "forward" : "backward");
@@ -506,47 +513,51 @@ export const ImportantNotesTab = ({
   }
 
   return (
-    <div className="space-y-5">
-      <header className="relative overflow-hidden rounded-2xl border border-emerald-900/10 bg-[#f5f0df] p-5 sm:p-6">
+    <div className="space-y-3">
+      <header className="relative overflow-hidden rounded-xl border border-emerald-900/10 bg-[#f5f0df] px-4 py-3">
         <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-amber-300/20" />
         <div className="absolute -bottom-16 right-20 h-32 w-32 rounded-full bg-emerald-500/10" />
-        <div className="relative flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-900 text-white shadow-sm">
-              <BookMarked className="h-6 w-6" />
+        <div className="relative flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-900 text-white shadow-sm">
+              <BookMarked className="h-5 w-5" />
             </span>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h2 className="font-serif text-xl font-bold text-emerald-950 sm:text-2xl">Important Notes</h2>
+                <h2 className="font-serif text-lg font-bold text-emerald-950 sm:text-xl">Important Notes</h2>
                 <Sparkles className="h-4 w-4 text-amber-600" />
               </div>
-              <p className="mt-1 text-sm text-emerald-900/65">
-                Carefully generated study notes, key points and revision questions
-              </p>
+              {visibleTopics.length === 1 ? (
+                <p className="truncate text-xs font-medium text-emerald-900/65">
+                  {visibleTopics[0].topic_title || topicTitle || "Topic notes"}
+                </p>
+              ) : (
+                <p className="text-xs text-emerald-900/65">
+                  Generated study notes, visuals and revision questions
+                </p>
+              )}
             </div>
           </div>
-          <Badge variant="outline" className="border-emerald-900/20 bg-white/60 text-emerald-900">
-            {visibleTopics.length} topic{visibleTopics.length === 1 ? "" : "s"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {visibleTopics.length === 1 && visibleTopics[0].topic_number && (
+              <Badge className="bg-emerald-900">Topic {visibleTopics[0].topic_number}</Badge>
+            )}
+            {visibleTopics.length === 1 && visibleTopics[0].generated_at ? (
+              <span className="hidden items-center gap-1.5 text-[11px] text-emerald-900/60 sm:flex">
+                <Clock3 className="h-3.5 w-3.5" />
+                {new Date(visibleTopics[0].generated_at).toLocaleDateString()}
+              </span>
+            ) : (
+              <Badge variant="outline" className="border-emerald-900/20 bg-white/60 text-emerald-900">
+                {visibleTopics.length} topics
+              </Badge>
+            )}
+          </div>
         </div>
       </header>
 
       {visibleTopics.length === 1 ? (
-        <div>
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            {visibleTopics[0].topic_number && (
-              <Badge className="bg-emerald-900">Topic {visibleTopics[0].topic_number}</Badge>
-            )}
-            <h3 className="font-serif text-xl font-semibold text-foreground">
-              {visibleTopics[0].topic_title || topicTitle || "Topic notes"}
-            </h3>
-            {visibleTopics[0].generated_at && (
-              <span className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Clock3 className="h-3.5 w-3.5" />
-                Generated {new Date(visibleTopics[0].generated_at).toLocaleDateString()}
-              </span>
-            )}
-          </div>
+        <div className="min-h-0">
           <TopicNotes topic={visibleTopics[0]} />
         </div>
       ) : (
