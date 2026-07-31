@@ -1058,22 +1058,15 @@ export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '6
               video_provider: "kie",
               ocr_provider: "local",
               avatar_language: "english",
-              target_languages: ["kannada"],
+              target_languages: ["kannada", "hindi"],
               llm_routing: {
                 chunker: "openrouter",
                 director: "openrouter",
                 manim_renderer: "openrouter",
-                remotion_renderer: "local",
-                video_renderer: "local",
-                prompt_enhancer: "local",
+                remotion_renderer: "openrouter",
+                video_renderer: "openrouter",
+                prompt_enhancer: "openrouter",
               },
-              ...(subjectName.trim().toLowerCase() === "science"
-                ? { avatar_id: "avatar_877c54be" }
-                : subjectName.trim().toLowerCase() === "maths"
-                  ? { avatar_id: "avatar_947bb537" }
-                  : subjectName.trim().toLowerCase() === "social science"
-                    ? { avatar_id: "avatar_5ab07dea" }
-                    : {}),
             }}
           />
         )}
