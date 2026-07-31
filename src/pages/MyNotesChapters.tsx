@@ -9,6 +9,8 @@ import {
   Cloud,
   Loader2,
   LoaderCircle,
+  Maximize2,
+  Minimize2,
   Trash2,
 } from 'lucide-react';
 import { SEOHead } from '@/components/SEO';
@@ -42,6 +44,7 @@ const MyNotesChapters = () => {
   const isMobile = useIsMobile();
   const { user } = useAuth();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const notebookRef = useRef<HTMLElement>(null);
   const saveTimerRef = useRef<number | null>(null);
   const latestNotesRef = useRef('');
   const hasLocalChangesRef = useRef(false);
@@ -74,6 +77,7 @@ const MyNotesChapters = () => {
   const [activeChapterIndex, setActiveChapterIndex] = useState(0);
   const [notes, setNotes] = useState('');
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('local');
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const activeChapter = chapters?.[activeChapterIndex];
 
   useEffect(() => {
@@ -178,39 +182,52 @@ const MyNotesChapters = () => {
       }
 
       const syntheticJobId = getAggregatedJobId(subjectId, activeChapter.id);
-      const { data: aggregateNote } = await supabase
-        .from('student_lecture_notes')
-        .select('content, updated_at')
-        .eq('student_id', user.id)
-        .eq('job_id', syntheticJobId)
-        .eq('subject_id', subjectId)
-        .eq('chapter_id', activeChapter.id)
-        .maybeSingle();
+      const [{ data: aggregateNote }, { data: topicNotes }] = await Promise.all([
+        supabase
+          .from('student_lecture_notes')
+          .select('content, updated_at')
+          .eq('student_id', user.id)
+          .eq('job_id', syntheticJobId)
+          .eq('subject_id', subjectId)
+          .eq('chapter_id', activeChapter.id)
+          .maybeSingle(),
+        supabase
+          .from('student_lecture_notes')
+          .select('content, topic_id, updated_at')
+          .eq('student_id', user.id)
+          .eq('subject_id', subjectId)
+          .eq('chapter_id', activeChapter.id)
+          .not('topic_id', 'is', null)
+          .order('updated_at', { ascending: true }),
+      ]);
 
       if (cancelled) return;
 
-      if (aggregateNote?.content) {
-        setNotes(aggregateNote.content);
-        latestNotesRef.current = aggregateNote.content;
+      const latestTopicUpdate = Math.max(
+        0,
+        ...(topicNotes || []).map((note) => new Date(note.updated_at).getTime()),
+      );
+      const aggregateUpdate = aggregateNote?.updated_at
+        ? new Date(aggregateNote.updated_at).getTime()
+        : 0;
+      const shouldRebuildFromTopics =
+        !!topicNotes?.length && (!aggregateNote?.content || latestTopicUpdate > aggregateUpdate);
+
+      if (aggregateNote?.content && !shouldRebuildFromTopics) {
+        const normalizedContent = aggregateNote.content.replace(
+          /^---\s*(.+?)\s*---$/gm,
+          'Topic: $1',
+        );
+        setNotes(normalizedContent);
+        latestNotesRef.current = normalizedContent;
         try {
-          localStorage.setItem(storageKey, aggregateNote.content);
+          localStorage.setItem(storageKey, normalizedContent);
         } catch {
           // Local storage is a best-effort fallback.
         }
         setSaveStatus('saved');
         return;
       }
-
-      const { data: topicNotes } = await supabase
-        .from('student_lecture_notes')
-        .select('content, topic_id, updated_at')
-        .eq('student_id', user.id)
-        .eq('subject_id', subjectId)
-        .eq('chapter_id', activeChapter.id)
-        .not('topic_id', 'is', null)
-        .order('updated_at', { ascending: false });
-
-      if (cancelled) return;
 
       if (topicNotes?.length) {
         const topicIds = topicNotes
@@ -222,11 +239,25 @@ const MyNotesChapters = () => {
 
         const topicMap = new Map<string, string>();
         (topics || []).forEach((topic) => topicMap.set(topic.id, topic.title));
-        const aggregated = topicNotes
-          .map((note) => {
-            const topicTitle = topicMap.get(note.topic_id || '') || 'Notes';
-            return `--- ${topicTitle} ---\n${note.content}`;
-          })
+        const existingAggregate = (aggregateNote?.content || '')
+          .replace(/^---\s*(.+?)\s*---$/gm, 'Topic: $1')
+          .trim();
+        const notesByTopic = new Map<string, string[]>();
+        topicNotes.forEach((note) => {
+          const noteContent = note.content.trim();
+          if (!noteContent || existingAggregate.includes(noteContent)) return;
+          const topicId = note.topic_id || 'unassigned';
+          const existing = notesByTopic.get(topicId) || [];
+          existing.push(noteContent);
+          notesByTopic.set(topicId, existing);
+        });
+        const newTopicSections = Array.from(notesByTopic.entries())
+          .map(([topicId, topicContents]) => {
+            const topicTitle = topicMap.get(topicId) || 'Lecture notes';
+            return `Topic: ${topicTitle}\n${topicContents.join('\n\n')}`;
+          });
+        const aggregated = [existingAggregate, ...newTopicSections]
+          .filter(Boolean)
           .join('\n\n');
 
         setNotes(aggregated);
@@ -262,6 +293,23 @@ const MyNotesChapters = () => {
     [],
   );
 
+  useEffect(() => {
+    const syncFullscreenState = () => {
+      setIsFullscreen(document.fullscreenElement === notebookRef.current);
+    };
+    document.addEventListener('fullscreenchange', syncFullscreenState);
+    return () => document.removeEventListener('fullscreenchange', syncFullscreenState);
+  }, []);
+
+  useEffect(() => {
+    if (!isFullscreen || document.fullscreenElement) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isFullscreen]);
+
   const saveLabel = {
     local: 'Saved on this device',
     loading: 'Loading saved notes...',
@@ -292,6 +340,24 @@ const MyNotesChapters = () => {
           ? 'is-error'
           : '';
 
+  const toggleFullscreen = async () => {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+      return;
+    }
+
+    if (isFullscreen) {
+      setIsFullscreen(false);
+      return;
+    }
+
+    try {
+      await notebookRef.current?.requestFullscreen();
+    } catch {
+      setIsFullscreen(true);
+    }
+  };
+
   return (
     <>
       <SEOHead
@@ -300,7 +366,10 @@ const MyNotesChapters = () => {
       />
       {!isMobile && <DashboardHeader />}
 
-      <main className="notes-app">
+      <main
+        ref={notebookRef}
+        className={`notes-app ${isFullscreen ? 'notes-app-fullscreen' : ''}`}
+      >
         {!isNotebookReady ? (
           <div className="grid min-h-[70vh] place-items-center">
             <div className="text-center">
@@ -343,7 +412,7 @@ const MyNotesChapters = () => {
 
             <section className="notes-editor-area">
               <div className="notes-editor-topbar">
-                <div className="flex min-w-0 items-center gap-3">
+                <div className="notes-editor-leading">
                   <button
                     className="flex-shrink-0 md:hidden"
                     onClick={() => navigate(`/my-notes/${courseId}`)}
@@ -351,24 +420,35 @@ const MyNotesChapters = () => {
                   >
                     <ArrowLeft size={19} />
                   </button>
-                  <div className="min-w-0">
-                    <h2>
-                      Chapter {activeChapter.chapter_number}: {activeChapter.title}
-                    </h2>
-                    <p>
-                      {currentSubject?.name} / {course?.name}
-                    </p>
-                  </div>
                 </div>
-                <div className={`notes-save-status ${saveStatusClass}`} title={saveLabel}>
-                  {saveStatus === 'saving' || saveStatus === 'loading' ? (
-                    <LoaderCircle size={14} className="animate-spin" />
-                  ) : saveStatus === 'saved' ? (
-                    <Check size={14} />
-                  ) : (
-                    <Cloud size={14} />
-                  )}
-                  <span>{saveLabel}</span>
+                <div className="notes-editor-title">
+                  <h2>
+                    Chapter {activeChapter.chapter_number}: {activeChapter.title}
+                  </h2>
+                  <p>
+                    {currentSubject?.name} / {course?.name}
+                  </p>
+                </div>
+                <div className="notes-editor-actions">
+                  <div className={`notes-save-status ${saveStatusClass}`} title={saveLabel}>
+                    {saveStatus === 'saving' || saveStatus === 'loading' ? (
+                      <LoaderCircle size={14} className="animate-spin" />
+                    ) : saveStatus === 'saved' ? (
+                      <Check size={14} />
+                    ) : (
+                      <Cloud size={14} />
+                    )}
+                    <span>{saveLabel}</span>
+                  </div>
+                  <button
+                    className="notes-fullscreen-button"
+                    onClick={() => void toggleFullscreen()}
+                    title={isFullscreen ? 'Exit full screen' : 'Open full screen'}
+                    aria-label={isFullscreen ? 'Exit full screen' : 'Open full screen'}
+                  >
+                    {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                    <span>{isFullscreen ? 'Exit' : 'Full screen'}</span>
+                  </button>
                 </div>
               </div>
 
