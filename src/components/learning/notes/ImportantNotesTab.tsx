@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -6,12 +6,15 @@ import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import {
   AlertCircle,
+  ArrowLeft,
+  ArrowRight,
   BookMarked,
   Brain,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
-  ImageIcon,
   Lightbulb,
   ListChecks,
   RefreshCw,
@@ -30,6 +33,7 @@ import {
   type ImportantTopicNotes,
   useImportantNotes,
 } from "@/hooks/useImportantNotes";
+import "./important-notes-book.css";
 
 interface ImportantNotesTabProps {
   chapterId?: string | null;
@@ -136,116 +140,309 @@ const QuestionCard = ({
   );
 };
 
-const TopicNotes = ({ topic }: { topic: ImportantTopicNotes }) => {
+type SectionBookPage = {
+  kind: "section";
+  section: NonNullable<ImportantTopicNotes["note_sections"]>[number];
+  sectionIndex: number;
+  images: ImportantNoteImage[];
+};
+
+type FormulaBookPage = {
+  kind: "formulas";
+  formulas: string[];
+  groupIndex: number;
+};
+
+type QuestionsBookPage = {
+  kind: "questions";
+  questions: ImportantNoteQuestion[];
+  startIndex: number;
+};
+
+type BookPage = SectionBookPage | FormulaBookPage | QuestionsBookPage;
+
+const chunk = <T,>(items: T[], size: number) => {
+  const groups: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    groups.push(items.slice(index, index + size));
+  }
+  return groups;
+};
+
+const buildBookPages = (topic: ImportantTopicNotes): BookPage[] => {
   const sections = topic.note_sections || [];
-  const formulas = (topic.latex_formulas || []).map(getFormulaText).filter(Boolean);
   const images = (topic.note_images || []).filter((image) => getImageUrl(image));
-  const answersByQuestion = new Map(
-    (topic.question_answers || []).map((answer) => [answer.question_id, answer]),
+  let imageCursor = 0;
+
+  const sectionPages: SectionBookPage[] = sections.map((section, sectionIndex) => {
+    const remainingImages = images.length - imageCursor;
+    const remainingSections = sections.length - sectionIndex;
+    const describedImages = section.image_descriptions?.length || 0;
+    const imageCount =
+      describedImages > 0 ? describedImages : remainingImages >= remainingSections ? 1 : 0;
+    const sectionImages = images.slice(imageCursor, imageCursor + imageCount);
+    imageCursor += imageCount;
+
+    return {
+      kind: "section",
+      section,
+      sectionIndex,
+      images: sectionImages,
+    };
+  });
+
+  if (imageCursor < images.length && sectionPages.length > 0) {
+    sectionPages[sectionPages.length - 1].images.push(...images.slice(imageCursor));
+  }
+
+  const formulas = (topic.latex_formulas || []).map(getFormulaText).filter(Boolean);
+  const formulaPages: FormulaBookPage[] = chunk(formulas, 4).map((group, groupIndex) => ({
+    kind: "formulas",
+    formulas: group,
+    groupIndex,
+  }));
+  const questionPages: QuestionsBookPage[] = chunk(topic.questions || [], 2).map(
+    (questions, groupIndex) => ({
+      kind: "questions",
+      questions,
+      startIndex: groupIndex * 2,
+    }),
   );
 
+  return [...sectionPages, ...formulaPages, ...questionPages];
+};
+
+const SectionPage = ({
+  page,
+  topicTitle,
+}: {
+  page: SectionBookPage;
+  topicTitle?: string;
+}) => {
+  const [activeImage, setActiveImage] = useState(0);
+  const image = page.images[activeImage];
+  const imageDescription = page.section.image_descriptions?.[activeImage];
+
   return (
-    <div className="space-y-5">
-      {sections.map((section, index) => (
-        <section
-          key={`${topic.topic_note_id}-section-${index}`}
-          className="overflow-hidden rounded-2xl border border-emerald-900/10 bg-[#fffdf7] shadow-sm"
+    <div className={`important-book-grid ${image ? "" : "important-book-grid--text-only"}`}>
+      <div className="important-book-copy">
+        <p className="important-book-eyebrow">Lesson {String(page.sectionIndex + 1).padStart(2, "0")}</p>
+        <h3>{page.section.heading || `Section ${page.sectionIndex + 1}`}</h3>
+        {page.section.explanation && (
+          <div className="important-book-explanation">
+            <Markdown>{page.section.explanation}</Markdown>
+          </div>
+        )}
+        {(page.section.key_points?.length || 0) > 0 && (
+          <div className="important-book-keypoints">
+            <p>
+              <ListChecks className="h-4 w-4" />
+              Remember
+            </p>
+            <ul>
+              {page.section.key_points!.map((point, pointIndex) => (
+                <li key={pointIndex}>
+                  <CheckCircle2 className="h-4 w-4" />
+                  <div>
+                    <Markdown inline>{point}</Markdown>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {image && (
+        <div className="important-book-visual">
+          <div className="important-book-photo-frame">
+            <img
+              key={getImageUrl(image)}
+              src={getImageUrl(image)}
+              alt={imageDescription || `${topicTitle || "Topic"} visual note`}
+              loading="eager"
+            />
+            <span className="important-book-tape important-book-tape--left" />
+            <span className="important-book-tape important-book-tape--right" />
+          </div>
+          {imageDescription && <p className="important-book-caption">{imageDescription}</p>}
+          {page.images.length > 1 && (
+            <div className="important-book-image-nav" aria-label="Page illustrations">
+              <button
+                type="button"
+                aria-label="Previous illustration"
+                onClick={() =>
+                  setActiveImage((current) =>
+                    current === 0 ? page.images.length - 1 : current - 1,
+                  )
+                }
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <div>
+                {page.images.map((item, index) => (
+                  <button
+                    type="button"
+                    key={`${getImageUrl(item)}-${index}`}
+                    aria-label={`Show illustration ${index + 1}`}
+                    aria-current={index === activeImage}
+                    className={index === activeImage ? "is-active" : ""}
+                    onClick={() => setActiveImage(index)}
+                  />
+                ))}
+              </div>
+              <button
+                type="button"
+                aria-label="Next illustration"
+                onClick={() =>
+                  setActiveImage((current) =>
+                    current === page.images.length - 1 ? 0 : current + 1,
+                  )
+                }
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const TopicNotes = ({ topic }: { topic: ImportantTopicNotes }) => {
+  const bookRef = useRef<HTMLDivElement>(null);
+  const pages = useMemo(() => buildBookPages(topic), [topic]);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [turnDirection, setTurnDirection] = useState<"forward" | "backward">("forward");
+  const answersByQuestion = useMemo(
+    () =>
+      new Map(
+        (topic.question_answers || []).map((answer) => [answer.question_id, answer]),
+      ),
+    [topic.question_answers],
+  );
+  const page = pages[pageIndex];
+
+  const turnPage = (nextIndex: number) => {
+    if (nextIndex < 0 || nextIndex >= pages.length || nextIndex === pageIndex) return;
+    setTurnDirection(nextIndex > pageIndex ? "forward" : "backward");
+    setPageIndex(nextIndex);
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        bookRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  };
+
+  if (!page) {
+    return (
+      <div className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
+        This topic does not have any generated note pages yet.
+      </div>
+    );
+  }
+
+  return (
+    <div ref={bookRef} className="important-book-shell">
+      <div className="important-book-cover-edge" />
+      <div className="important-book-spine" aria-hidden="true" />
+      <article
+        key={`${topic.topic_note_id}-${pageIndex}-${turnDirection}`}
+        className={`important-book-page important-book-page--${turnDirection}`}
+        aria-live="polite"
+      >
+        <div className="important-book-page-header">
+          <span>{topic.topic_title || "Important Notes"}</span>
+          <span>Page {pageIndex + 1}</span>
+        </div>
+
+        <div className="important-book-page-content">
+          {page.kind === "section" && (
+            <SectionPage page={page} topicTitle={topic.topic_title} />
+          )}
+
+          {page.kind === "formulas" && (
+            <div className="important-book-reference-page">
+              <div className="important-book-reference-title">
+                <span><Sparkles className="h-5 w-5" /></span>
+                <div>
+                  <p>Quick reference</p>
+                  <h3>Important formulas</h3>
+                </div>
+              </div>
+              <div className="important-book-formulas">
+                {page.formulas.map((formula, index) => (
+                  <div key={index}>
+                    <Markdown>{`$$${formula.replace(/^\$+|\$+$/g, "")}$$`}</Markdown>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {page.kind === "questions" && (
+            <div className="important-book-practice-page">
+              <div className="important-book-reference-title">
+                <span><Brain className="h-5 w-5" /></span>
+                <div>
+                  <p>Test yourself</p>
+                  <h3>Important questions</h3>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {page.questions.map((question, index) => (
+                  <QuestionCard
+                    key={question.id || index}
+                    question={question}
+                    answer={answersByQuestion.get(question.id)}
+                    index={page.startIndex + index}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="important-book-page-number">{pageIndex + 1}</div>
+      </article>
+
+      <div className="important-book-controls">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => turnPage(pageIndex - 1)}
+          disabled={pageIndex === 0}
+          className="gap-2"
         >
-          <div className="border-b border-emerald-900/10 bg-gradient-to-r from-emerald-50 to-amber-50 px-5 py-4">
-            <div className="flex items-center gap-3">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-900 text-sm font-bold text-white">
-                {index + 1}
-              </span>
-              <h3 className="font-serif text-lg font-semibold text-emerald-950">
-                {section.heading || `Section ${index + 1}`}
-              </h3>
-            </div>
-          </div>
-          <div className="space-y-5 p-5">
-            {section.explanation && (
-              <div className="prose prose-stone prose-sm max-w-none leading-relaxed">
-                <Markdown>{section.explanation}</Markdown>
-              </div>
-            )}
-            {(section.key_points?.length || 0) > 0 && (
-              <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/60 p-4">
-                <p className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-emerald-800">
-                  <ListChecks className="h-4 w-4" />
-                  Key points
-                </p>
-                <ul className="space-y-2.5">
-                  {section.key_points!.map((point, pointIndex) => (
-                    <li key={pointIndex} className="flex items-start gap-2.5 text-sm leading-relaxed text-stone-700">
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                      <div className="min-w-0">
-                        <Markdown inline>{point}</Markdown>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        </section>
-      ))}
-
-      {formulas.length > 0 && (
-        <section className="rounded-2xl border border-sky-200 bg-sky-50/60 p-5">
-          <h3 className="mb-3 font-serif text-lg font-semibold text-sky-950">Important formulas</h3>
-          <div className="grid gap-3">
-            {formulas.map((formula, index) => (
-              <div key={index} className="overflow-x-auto rounded-xl bg-white p-4 text-center shadow-sm">
-                <Markdown>{`$$${formula.replace(/^\$+|\$+$/g, "")}$$`}</Markdown>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {images.length > 0 && (
-        <section>
-          <h3 className="mb-3 flex items-center gap-2 font-serif text-lg font-semibold text-emerald-950">
-            <ImageIcon className="h-5 w-5" />
-            Visual notes
-          </h3>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {images.map((image, index) => (
-              <figure key={`${getImageUrl(image)}-${index}`} className="overflow-hidden rounded-2xl border bg-white shadow-sm">
-                <img
-                  src={getImageUrl(image)}
-                  alt={`${topic.topic_title || "Topic"} visual note ${index + 1}`}
-                  className="h-auto w-full object-contain"
-                  loading="lazy"
-                />
-              </figure>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {(topic.questions?.length || 0) > 0 && (
-        <section className="rounded-2xl border border-amber-200/80 bg-amber-50/50 p-4 sm:p-5">
-          <div className="mb-4 flex items-center gap-3">
-            <span className="rounded-lg bg-amber-100 p-2 text-amber-800">
-              <Brain className="h-5 w-5" />
-            </span>
-            <div>
-              <h3 className="font-serif text-lg font-semibold text-stone-900">Important questions</h3>
-              <p className="text-xs text-stone-500">Review these after studying the notes</p>
-            </div>
-          </div>
-          <div className="space-y-3">
-            {topic.questions!.map((question, index) => (
-              <QuestionCard
-                key={question.id || index}
-                question={question}
-                answer={answersByQuestion.get(question.id)}
-                index={index}
+          <ArrowLeft className="h-4 w-4" />
+          Previous page
+        </Button>
+        <div className="important-book-progress">
+          <span>{pageIndex + 1} of {pages.length}</span>
+          <div>
+            {pages.map((_, index) => (
+              <button
+                key={index}
+                type="button"
+                aria-label={`Open page ${index + 1}`}
+                aria-current={index === pageIndex}
+                className={index === pageIndex ? "is-active" : ""}
+                onClick={() => turnPage(index)}
               />
             ))}
           </div>
-        </section>
-      )}
+        </div>
+        <Button
+          type="button"
+          onClick={() => turnPage(pageIndex + 1)}
+          disabled={pageIndex === pages.length - 1}
+          className="gap-2 bg-emerald-900 hover:bg-emerald-800"
+        >
+          Next page
+          <ArrowRight className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 };
