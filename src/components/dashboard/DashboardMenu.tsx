@@ -2,7 +2,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { LayoutDashboard, BookOpen, Video, Trophy, MessageSquare, HelpCircle, User, LogOut, Menu, Newspaper, CalendarClock, Grid3X3, FileText } from "lucide-react";
+import { LayoutDashboard, BookOpen, Video, Trophy, MessageSquare, HelpCircle, User, LogOut, Menu, Newspaper, CalendarClock, Grid3X3, FileText, NotebookPen } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { queryClient } from "@/lib/queryClient";
@@ -15,6 +15,7 @@ const items = [
   { label: "Live Classes", icon: Video, to: "/live" },
   { label: "Time Table", icon: CalendarClock, to: "/timetable" },
   { label: "My Tests", icon: FileText, to: "/my-tests" },
+  { label: "My Notes", icon: NotebookPen, to: "/my-notes" },
   { label: "My Rewards", icon: Trophy, to: "/my-rewards" },
   { label: "Forum", icon: MessageSquare, to: "/forum" },
   { label: "Blog", icon: Newspaper, to: "/blog" },

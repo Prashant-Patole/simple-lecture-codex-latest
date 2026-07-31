@@ -1,12 +1,12 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { LayoutGrid, BookOpen, Home, LayoutDashboard, Film } from "lucide-react";
+import { LayoutGrid, BookOpen, Home, LayoutDashboard, Film, NotebookPen } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
   { icon: LayoutGrid, label: "Browse", path: "/programs", requiresAuth: false },
   { icon: BookOpen, label: "My Class", path: "/my-courses", requiresAuth: true },
   { icon: Home, label: "Home", path: "/", isCenter: true, requiresAuth: false },
-  { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard", requiresAuth: true },
+  { icon: NotebookPen, label: "My Notes", path: "/my-notes", requiresAuth: true },
   { icon: Film, label: "Reels", path: "/reels", requiresAuth: true },
 ];
 

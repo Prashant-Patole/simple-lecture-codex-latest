@@ -176,6 +176,9 @@ const MyTests = lazyWithRetry(() => import("./pages/MyTests"));
 const MyTestTake = lazyWithRetry(() => import("./pages/MyTestTake"));
 const MyTestResult = lazyWithRetry(() => import("./pages/MyTestResult"));
 const PracticeResultReview = lazyWithRetry(() => import("./pages/PracticeResultReview"));
+const MyNotesCourses = lazyWithRetry(() => import("./pages/MyNotesCourses"));
+const MyNotesSubjects = lazyWithRetry(() => import("./pages/MyNotesSubjects"));
+const MyNotesChapters = lazyWithRetry(() => import("./pages/MyNotesChapters"));
 
 
 // Admin pages
@@ -371,6 +374,9 @@ const App = () => (
                 <Route path="/my-tests/:id/take" element={<MyTestTake />} />
                 <Route path="/my-tests/:id/result" element={<MyTestResult />} />
                 <Route path="/practice-results/:resultId" element={<PracticeResultReview />} />
+                <Route path="/my-notes" element={<MyNotesCourses />} />
+                <Route path="/my-notes/:courseId" element={<MyNotesSubjects />} />
+                <Route path="/my-notes/:courseId/:subjectId" element={<MyNotesChapters />} />
 
                 
                 {/* Admin Routes */}
