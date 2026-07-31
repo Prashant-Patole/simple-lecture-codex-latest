@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   BookMarked,
@@ -46,6 +47,7 @@ const MyNotesChapters = () => {
     subjectId: string;
   }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const { user } = useAuth();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -83,6 +85,7 @@ const MyNotesChapters = () => {
   const [notes, setNotes] = useState('');
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('local');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const activeChapter = chapters?.[activeChapterIndex];
 
   useEffect(() => {
@@ -314,9 +317,51 @@ const MyNotesChapters = () => {
     local: 'Saved on this device',
     loading: 'Loading saved notes...',
     saving: 'Saving to your account...',
-    saved: 'Saved to your account',
+    saved: 'Saved',
     error: 'Saved locally - cloud sync will retry',
   }[saveStatus];
+
+  const clearNotes = async () => {
+    if (!activeChapter || isClearing) return;
+
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
+    setIsClearing(true);
+    setSaveStatus('saving');
+
+    if (user && subjectId) {
+      const { error } = await supabase
+        .from('student_lecture_notes')
+        .delete()
+        .eq('student_id', user.id)
+        .eq('subject_id', subjectId)
+        .eq('chapter_id', activeChapter.id);
+
+      if (error) {
+        console.error('[MyNotesChapters] clear failed', error);
+        setSaveStatus('error');
+        setIsClearing(false);
+        return;
+      }
+    }
+
+    setNotes('');
+    latestNotesRef.current = '';
+    hasLocalChangesRef.current = false;
+    try {
+      localStorage.removeItem(storageKey);
+    } catch {
+      // Local storage is a best-effort fallback.
+    }
+
+    setSaveStatus(user ? 'saved' : 'local');
+    setIsClearing(false);
+    void queryClient.invalidateQueries({ queryKey: ['subject-note-counts'] });
+    void queryClient.invalidateQueries({ queryKey: ['subject-notes', subjectId, user?.id] });
+  };
 
   const goToChapter = (index: number) => {
     if (index < 0 || index >= (chapters?.length ?? 0)) return;
@@ -497,9 +542,17 @@ const MyNotesChapters = () => {
                       <span>Autosave is on</span>
                     </div>
                     {notes && (
-                      <button className="notes-clear-button" onClick={() => updateNotes('')}>
-                        <Trash2 size={13} />
-                        Clear page
+                      <button
+                        className="notes-clear-button"
+                        onClick={() => void clearNotes()}
+                        disabled={isClearing}
+                      >
+                        {isClearing ? (
+                          <LoaderCircle size={13} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={13} />
+                        )}
+                        {isClearing ? 'Clearing...' : 'Clear page'}
                       </button>
                     )}
                   </footer>
