@@ -20,7 +20,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { BookOpen, List, Brain, FileText, Users, GraduationCap, ArrowLeft, Sparkles, Loader2, FileJson, Video, Languages, ClipboardList, Film, Bot } from "lucide-react";
+import { BookOpen, List, Brain, FileText, Users, GraduationCap, ArrowLeft, Sparkles, Loader2, FileJson, Video, Languages, ClipboardList, Film, Bot, NotebookTabs } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ImageUploadWidget } from "@/components/admin/ImageUploadWidget";
 import { AIImageGenerator } from "@/components/admin/AIImageGenerator";
@@ -45,6 +45,7 @@ import { SubjectVideoGeneratorTab } from "@/components/admin/SubjectVideoGenerat
 import { SubjectLanguagesTab } from "@/components/admin/SubjectLanguagesTab";
 import { SubjectReelsTab } from "@/components/admin/SubjectReelsTab";
 import { SubjectStoriesTab } from "@/components/admin/SubjectStoriesTab";
+import { SubjectNotesTab } from "@/components/admin/SubjectNotesTab";
 import { SubjectAskAITab } from "@/components/admin/SubjectAskAITab";
 import { SubjectPYQTab } from "@/components/admin/SubjectPYQTab";
 import { useVideoGenerationJobs, useAutoSyncJobStatuses } from "@/hooks/useVideoGenerationJobs";
@@ -286,6 +287,10 @@ export default function SubjectForm() {
             <TabsTrigger value="stories" disabled={!isEdit} className="gap-1 md:gap-2 px-1 md:px-3 py-2">
               <Sparkles className="h-3.5 w-3.5 md:h-4 md:w-4" />
               <span className="text-[9px] md:text-sm truncate">Stories</span>
+            </TabsTrigger>
+            <TabsTrigger value="notes" disabled={!isEdit} className="gap-1 md:gap-2 px-1 md:px-3 py-2">
+              <NotebookTabs className="h-3.5 w-3.5 md:h-4 md:w-4" />
+              <span className="text-[9px] md:text-sm truncate">Notes</span>
             </TabsTrigger>
             <TabsTrigger value="ask-ai" disabled={!isEdit} className="gap-1 md:gap-2 px-1 md:px-3 py-2">
               <Bot className="h-3.5 w-3.5 md:h-4 md:w-4" />
@@ -643,6 +648,23 @@ export default function SubjectForm() {
             <Card>
               <CardContent className="py-12 text-center text-muted-foreground">
                 Save the subject first to submit stories.
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Tab: Notes */}
+        <TabsContent value="notes">
+          {isEdit && id ? (
+            <SubjectNotesTab
+              subjectId={id}
+              subjectName={subject?.name || ""}
+              subjectSlug={(subject as any)?.slug || ""}
+            />
+          ) : (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                Save the subject first to generate notes.
               </CardContent>
             </Card>
           )}

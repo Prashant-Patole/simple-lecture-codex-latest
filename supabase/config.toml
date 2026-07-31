@@ -40,6 +40,9 @@ verify_jwt = true
 [functions.student-note-spellcheck]
 verify_jwt = true
 
+[functions.allocate-topic-pyqs]
+verify_jwt = true
+
 [functions.ai-generate-dpp]
 verify_jwt = true
 
