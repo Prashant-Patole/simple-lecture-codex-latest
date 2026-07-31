@@ -656,7 +656,7 @@ export function SubjectNotesTab({
                   ) : (
                     <Send className="mr-2 h-4 w-4" />
                   )}
-                  Import & Generate
+                  Submit and Generate
                 </Button>
               </div>
             </div>
