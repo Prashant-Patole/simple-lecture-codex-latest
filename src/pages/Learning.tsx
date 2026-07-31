@@ -16,7 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { CheckCircle, Circle, Lock, AlertCircle, PanelLeftClose, PanelLeft, FolderOpen, ArrowLeft, BookOpen, ChevronRight, Video, Sparkles, ClipboardList, FileText, Target, BarChart3, HelpCircle, MessageCircleQuestion, Menu, Lightbulb } from "lucide-react";
+import { CheckCircle, Circle, Lock, AlertCircle, PanelLeftClose, PanelLeft, FolderOpen, ArrowLeft, BookOpen, BookMarked, ChevronRight, Video, Sparkles, ClipboardList, FileText, Target, BarChart3, HelpCircle, MessageCircleQuestion, Menu, Lightbulb } from "lucide-react";
 
 
 import { SubjectNavigationBar } from "@/components/learning/SubjectNavigationBar";
@@ -33,6 +33,7 @@ import { QuestionsTab } from "@/components/learning/QuestionsTab";
 import { SolutionsTab } from "@/components/learning/SolutionsTab";
 import { PYQsStudentTab } from "@/components/learning/PYQsStudentTab";
 import { NotesTab } from "@/components/learning/notes/NotesTab";
+import { ImportantNotesTab } from "@/components/learning/notes/ImportantNotesTab";
 
 import { CourseWelcomeCards } from "@/components/learning/CourseWelcomeCards";
 import { SEOHead } from "@/components/SEO";
@@ -405,6 +406,7 @@ export default function Learning({
     return [
       { value: "ai-assistant", label: "Ask AI", icon: Sparkles, desc: "Have a doubt? Get help" },
       { value: "notes", label: "Notes", icon: BookOpen, desc: "Read topic notes" },
+      { value: "important-notes", label: "Important Notes", icon: BookMarked, desc: "Generated revision notes" },
       { value: "all-questions", label: "Questions", icon: HelpCircle, desc: "Browse Q&A" },
       { value: "solutions", label: "Solutions", icon: Lightbulb, desc: "Watch answers" },
       { value: "assignments", label: "Assignments", icon: ClipboardList, desc: "View your tasks" },
@@ -578,9 +580,10 @@ export default function Learning({
                 <TabsTrigger value="questions" className="py-2 rounded-lg font-medium text-sm">Questions</TabsTrigger>
               </TabsList>
             ) : (
-              <TabsList className="p-1.5 h-auto bg-muted/80 rounded-xl border shadow-sm grid w-full grid-cols-10">
+              <TabsList className="p-1.5 h-auto bg-muted/80 rounded-xl border shadow-sm grid w-full grid-cols-11">
                 <TabsTrigger value="videos" className="py-2 rounded-lg font-medium text-sm">Classes</TabsTrigger>
                 <TabsTrigger value="notes" className="py-2 rounded-lg font-medium text-sm">Notes</TabsTrigger>
+                <TabsTrigger value="important-notes" className="py-2 rounded-lg font-medium text-xs">Important Notes</TabsTrigger>
                 <TabsTrigger value="ai-assistant" className="py-2 rounded-lg font-medium text-sm">AI</TabsTrigger>
                 <TabsTrigger value="all-questions" className="py-2 rounded-lg font-medium text-sm">Questions</TabsTrigger>
                 <TabsTrigger value="solutions" className="py-2 rounded-lg font-medium text-sm">Solutions</TabsTrigger>
@@ -649,6 +652,7 @@ export default function Learning({
                 />
               </TabsContent>
               <TabsContent value="notes"><NotesTab topicId={selectedTopic.id} chapterId={selectedTopic.chapter_id} subjectId={selectedSubjectId ?? undefined} topicTitle={selectedTopic.title} /></TabsContent>
+              <TabsContent value="important-notes"><ImportantNotesTab chapterId={selectedTopic.chapter_id} topicId={selectedTopic.id} topicTitle={selectedTopic.title} /></TabsContent>
               <TabsContent value="all-questions"><QuestionsTab topicId={selectedTopic.id} subjectId={selectedSubjectId ?? undefined} /></TabsContent>
               <TabsContent value="solutions"><SolutionsTab topicId={selectedTopic.id} chapterId={selectedTopic.chapter_id} subjectId={selectedSubjectId ?? undefined} subjectName={selectedSubject?.name} onOpenInAITab={openCachedInAITab} /></TabsContent>
               <TabsContent value="assignments"><AssignmentViewer topicId={selectedTopic.id} chapterId={selectedTopic.chapter_id} subjectId={selectedSubjectId ?? undefined} onOpenInAITab={openCachedInAITab} /></TabsContent>
@@ -680,9 +684,10 @@ export default function Learning({
                 <TabsTrigger value="questions" className="py-2 rounded-lg font-medium text-sm">Questions</TabsTrigger>
               </TabsList>
             ) : (
-              <TabsList className="p-1.5 h-auto bg-muted/80 rounded-xl border shadow-sm grid w-full grid-cols-10">
+              <TabsList className="p-1.5 h-auto bg-muted/80 rounded-xl border shadow-sm grid w-full grid-cols-11">
                 <TabsTrigger value="videos" className="py-2 rounded-lg font-medium text-sm">Classes</TabsTrigger>
                 <TabsTrigger value="notes" className="py-2 rounded-lg font-medium text-sm">Notes</TabsTrigger>
+                <TabsTrigger value="important-notes" className="py-2 rounded-lg font-medium text-xs">Important Notes</TabsTrigger>
                 <TabsTrigger value="ai-assistant" className="py-2 rounded-lg font-medium text-sm">AI</TabsTrigger>
                 <TabsTrigger value="all-questions" className="py-2 rounded-lg font-medium text-sm">Questions</TabsTrigger>
                 <TabsTrigger value="solutions" className="py-2 rounded-lg font-medium text-sm">Solutions</TabsTrigger>
@@ -745,6 +750,9 @@ export default function Learning({
               </TabsContent>
               <TabsContent value="notes">
                 <ChapterNotes chapter={selectedChapter} subjectId={selectedSubjectId ?? undefined} />
+              </TabsContent>
+              <TabsContent value="important-notes">
+                <ImportantNotesTab chapterId={selectedChapter.id} />
               </TabsContent>
               <TabsContent value="all-questions"><QuestionsTab chapterId={selectedChapter.id} chapterOnly subjectId={selectedSubjectId ?? undefined} /></TabsContent>
               <TabsContent value="solutions"><SolutionsTab chapterId={selectedChapter.id} subjectId={selectedSubjectId ?? undefined} subjectName={selectedSubject?.name} onOpenInAITab={openCachedInAITab} /></TabsContent>
@@ -980,6 +988,7 @@ export default function Learning({
                           { value: "videos", label: "Classes", icon: Video },
                           { value: "ai-assistant", label: "Ask AI", icon: Sparkles },
                           { value: "notes", label: "Notes", icon: BookOpen },
+                          { value: "important-notes", label: "Important Notes", icon: BookMarked },
                           { value: "all-questions", label: "Questions", icon: HelpCircle },
                           { value: "solutions", label: "Solutions", icon: Lightbulb },
                           { value: "assignments", label: "Assignments", icon: ClipboardList },
@@ -1022,6 +1031,7 @@ export default function Learning({
                     ] : [
                       { value: "ai-assistant", label: "Ask AI", icon: Sparkles, desc: "Have a doubt? Get help" },
                       { value: "notes", label: "Notes", icon: BookOpen, desc: "Read topic notes" },
+                      { value: "important-notes", label: "Important Notes", icon: BookMarked, desc: "Generated revision notes" },
                       { value: "all-questions", label: "Questions", icon: HelpCircle, desc: "Browse Q&A" },
                       { value: "solutions", label: "Solutions", icon: Lightbulb, desc: "Watch answers" },
                       { value: "assignments", label: "Assignments", icon: ClipboardList, desc: "View your tasks" },
