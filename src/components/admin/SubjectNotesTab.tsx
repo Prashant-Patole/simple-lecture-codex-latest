@@ -368,7 +368,7 @@ export function SubjectNotesTab({
     }
   };
 
-  const documentId = findDocumentId(generationResult) || docRow?.id || null;
+  const documentId = findDocumentId(generationResult);
 
   const importAndGenerate = () =>
     runAction("generate", async () => {
@@ -379,16 +379,27 @@ export function SubjectNotesTab({
       } catch {
         throw new Error("The payload JSON is invalid");
       }
-      const importResult = await apiRequest(apiBase, "/questions/import", "POST", body);
+      let importResult: any;
+      try {
+        importResult = await apiRequest(apiBase, "/documents/import-json", "POST", body);
+      } catch (error: any) {
+        throw new Error(`Document import failed: ${error?.message || String(error)}`);
+      }
       const importedDocumentId = findDocumentId(importResult) || body?.document?.id;
       if (!importedDocumentId) {
-        throw new Error("Question import succeeded but no document ID was available");
+        throw new Error("Document import succeeded but no document ID was available");
       }
-      const generated = await apiRequest(
-        apiBase,
-        `/notes/generate/${encodeURIComponent(importedDocumentId)}`,
-        "POST",
-      );
+      setGenerationResult({ import: importResult, document_id: importedDocumentId });
+      let generated: any;
+      try {
+        generated = await apiRequest(
+          apiBase,
+          `/notes/generate/${encodeURIComponent(importedDocumentId)}`,
+          "POST",
+        );
+      } catch (error: any) {
+        throw new Error(`Notes generation failed: ${error?.message || String(error)}`);
+      }
       setGenerationResult({ import: importResult, generation: generated, document_id: importedDocumentId });
       setStatusResult(null);
       toast({ title: "Notes generation queued", description: generated?.message || importedDocumentId });
@@ -411,7 +422,9 @@ export function SubjectNotesTab({
         "POST",
       );
       setGenerationResult((current: any) => ({ ...current, retry: result }));
-      await refreshStatus();
+      setStatusResult(
+        await apiRequest(apiBase, `/notes/status/${encodeURIComponent(documentId)}`),
+      );
     });
 
   const resetGeneration = () =>
