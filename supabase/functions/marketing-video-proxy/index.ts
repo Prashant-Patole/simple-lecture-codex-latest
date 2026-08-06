@@ -229,10 +229,11 @@ Deno.serve(async (req) => {
           console.warn("[marketing-video-proxy] Unable to resolve subject avatar_id:", e);
         }
       }
-      if (resolvedAvatarId) {
-        fd.append("avatar_id", resolvedAvatarId);
-        console.log(`[marketing:submit] Attached avatar_id: ${resolvedAvatarId}`);
+      if (!resolvedAvatarId) {
+        resolvedAvatarId = "avatar_5ab07dea"; // Global fallback default avatar ID
       }
+      fd.append("avatar_id", resolvedAvatarId);
+      console.log(`[marketing:submit] Structured Audit: subject="${subject}", raw_avatar_id="${avatar_id}", resolved_avatar_id="${resolvedAvatarId}"`);
       if (ocr_provider) fd.append("ocr_provider", String(ocr_provider));
       if (skip_threejs !== undefined) fd.append("skip_threejs", String(skip_threejs));
       if (llm_routing !== undefined) {

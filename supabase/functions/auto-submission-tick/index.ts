@@ -204,8 +204,11 @@ async function processRun(supabase: any, run: any) {
           .maybeSingle();
         if (subRow?.avatar_id) effectiveAvatarId = subRow.avatar_id;
       }
-      if (effectiveAvatarId) payload.avatar_id = effectiveAvatarId;
-      console.log(`[auto-submission-tick] Submitting job with avatar_id: "${payload.avatar_id || 'none'}" for subject "${run.subject_name}"`);
+      if (!effectiveAvatarId) {
+        effectiveAvatarId = "avatar_5ab07dea"; // Global fallback default avatar ID
+      }
+      payload.avatar_id = effectiveAvatarId;
+      console.log(`[auto-submission-tick] Structured Audit: subject="${run.subject_name}", cfg_avatar_id="${cfg.avatar_id}", effective_avatar_id="${payload.avatar_id}"`);
       if (cfg.model) payload.model = cfg.model;
       if (cfg.title) payload.title = cfg.title;
       if (cfg.target_languages) payload.target_languages = cfg.target_languages;

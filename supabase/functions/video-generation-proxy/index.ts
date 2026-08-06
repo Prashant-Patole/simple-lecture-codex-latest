@@ -974,28 +974,30 @@ Deno.serve(async (req) => {
       if (avatar_speaker) formData.append('avatar_speaker', String(avatar_speaker));
 
       let resolvedAvatarId = avatar_id ? String(avatar_id) : '';
-      const isReelSubmission = Number(target_port) === 5006 && reel_with_avatar === true && reel_variant !== 'story';
-      if (!resolvedAvatarId && isReelSubmission && subject) {
-        const admin = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-          { auth: { persistSession: false } },
-        );
-        const { data: avatarConfigRow, error: avatarConfigError } = await admin
-          .from('ai_settings')
-          .select('setting_value')
-          .eq('setting_key', 'marketing_avatar_config')
-          .maybeSingle();
-        if (avatarConfigError) {
-          console.warn('[submit:reel] Unable to load subject avatar config', avatarConfigError);
-        } else {
-          const config = avatarConfigRow?.setting_value as Record<string, unknown> | null;
-          const subjects = config?.subjects as Record<string, Record<string, unknown>> | undefined;
-          const configuredAvatarId = subjects?.[String(subject).trim().toLowerCase()]?.avatar_id;
-          if (configuredAvatarId) resolvedAvatarId = String(configuredAvatarId);
+      if (!resolvedAvatarId && subject) {
+        try {
+          const admin = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+            { auth: { persistSession: false } },
+          );
+          const { data: subRow } = await admin
+            .from('popular_subjects')
+            .select('avatar_id')
+            .ilike('name', String(subject).trim())
+            .maybeSingle();
+          if (subRow?.avatar_id) resolvedAvatarId = String(subRow.avatar_id);
+        } catch (err) {
+          console.warn('[video-generation-proxy] Failed to resolve avatar_id from popular_subjects:', err);
         }
       }
-      if (resolvedAvatarId) formData.append('avatar_id', resolvedAvatarId);
+
+      if (!resolvedAvatarId) {
+        resolvedAvatarId = 'avatar_5ab07dea'; // Global fallback default avatar ID
+      }
+
+      formData.append('avatar_id', resolvedAvatarId);
+      console.log(`[video-generation-proxy:submit] Structured Audit: subject="${subject}", raw_avatar_id="${avatar_id}", resolved_avatar_id="${resolvedAvatarId}", port=${target_port}`);
 
       // Reel-mode optional fields (only appended when explicitly provided)
       if (audio_only !== undefined) formData.append('audio_only', String(audio_only));
