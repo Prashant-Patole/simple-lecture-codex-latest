@@ -211,7 +211,28 @@ Deno.serve(async (req) => {
       if (story_hint) fd.append("story_hint", String(story_hint));
       if (avatar_speaker) fd.append("avatar_speaker", String(avatar_speaker));
       if (avatar_language) fd.append("avatar_language", String(avatar_language));
-      if (avatar_id) fd.append("avatar_id", String(avatar_id));
+      let resolvedAvatarId = avatar_id ? String(avatar_id) : "";
+      if (!resolvedAvatarId && subject) {
+        try {
+          const admin = createClient(
+            Deno.env.get("SUPABASE_URL") ?? "",
+            Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+            { auth: { persistSession: false } }
+          );
+          const { data: subRow } = await admin
+            .from("popular_subjects")
+            .select("avatar_id")
+            .ilike("name", String(subject).trim())
+            .maybeSingle();
+          if (subRow?.avatar_id) resolvedAvatarId = String(subRow.avatar_id);
+        } catch (e) {
+          console.warn("[marketing-video-proxy] Unable to resolve subject avatar_id:", e);
+        }
+      }
+      if (resolvedAvatarId) {
+        fd.append("avatar_id", resolvedAvatarId);
+        console.log(`[marketing:submit] Attached avatar_id: ${resolvedAvatarId}`);
+      }
       if (ocr_provider) fd.append("ocr_provider", String(ocr_provider));
       if (skip_threejs !== undefined) fd.append("skip_threejs", String(skip_threejs));
       if (llm_routing !== undefined) {

@@ -194,7 +194,18 @@ async function processRun(supabase: any, run: any) {
       if (cfg.image_provider) payload.image_provider = cfg.image_provider;
       if (cfg.image_model) payload.image_model = cfg.image_model;
       if (cfg.avatar_speaker) payload.avatar_speaker = cfg.avatar_speaker;
-      if (cfg.avatar_id) payload.avatar_id = cfg.avatar_id;
+
+      let effectiveAvatarId = cfg.avatar_id as string | undefined;
+      if (!effectiveAvatarId && run.subject_id) {
+        const { data: subRow } = await supabase
+          .from("popular_subjects")
+          .select("avatar_id")
+          .eq("id", run.subject_id)
+          .maybeSingle();
+        if (subRow?.avatar_id) effectiveAvatarId = subRow.avatar_id;
+      }
+      if (effectiveAvatarId) payload.avatar_id = effectiveAvatarId;
+      console.log(`[auto-submission-tick] Submitting job with avatar_id: "${payload.avatar_id || 'none'}" for subject "${run.subject_name}"`);
       if (cfg.model) payload.model = cfg.model;
       if (cfg.title) payload.title = cfg.title;
       if (cfg.target_languages) payload.target_languages = cfg.target_languages;

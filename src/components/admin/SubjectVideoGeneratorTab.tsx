@@ -769,6 +769,10 @@ export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '6
         },
       };
 
+      if (subjectData?.avatar_id) {
+        payload.avatar_id = subjectData.avatar_id;
+      }
+
       if (documentUrl) {
         payload.document_url = documentUrl;
         payload.file_name = fileName;

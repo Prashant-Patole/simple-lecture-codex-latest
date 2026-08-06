@@ -144,15 +144,23 @@ export function AutoSubmissionPipeline({ subjectId, subjectName, serverIp, kind 
         status: "queued",
       }));
 
+      let resolvedAvatarId = marketingConfig?.avatar_id || (pipelineConfig as any)?.avatar_id || "";
+      if (!resolvedAvatarId && subjectId) {
+        const { data: subRow } = await supabase
+          .from("popular_subjects")
+          .select("avatar_id")
+          .eq("id", subjectId)
+          .maybeSingle();
+        if (subRow?.avatar_id) resolvedAvatarId = subRow.avatar_id;
+      }
+
       // Combine base pipelineConfig with user-selected marketing payload config if in marketing mode
       const effectivePipelineConfig = kind === "marketing" ? {
         ...(pipelineConfig || {}),
-        ...(marketingConfig ? {
-          avatar_id: marketingConfig.avatar_id,
-          target_languages: marketingConfig.target_languages,
-          avatar_speaker: marketingConfig.avatar_speaker,
-          llm_routing: marketingConfig.llm_routing,
-        } : {}),
+        avatar_id: resolvedAvatarId,
+        target_languages: marketingConfig?.target_languages ?? (pipelineConfig as any)?.target_languages ?? ["kannada", "hindi"],
+        avatar_speaker: marketingConfig?.avatar_speaker ?? (pipelineConfig as any)?.avatar_speaker ?? "abhilash",
+        llm_routing: marketingConfig?.llm_routing ?? (pipelineConfig as any)?.llm_routing,
       } : (pipelineConfig ?? null);
 
       const { data: { user } } = await supabase.auth.getUser();
