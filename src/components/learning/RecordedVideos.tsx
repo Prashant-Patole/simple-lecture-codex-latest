@@ -1,17 +1,19 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useCheckerReviews } from "@/hooks/useCheckerReviews";
 import { CheckerReviewPanel } from "@/components/checker/CheckerReviewPanel";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Play, Video, Sparkles, X, Globe, CheckCircle, Megaphone } from "lucide-react";
+import { Play, Video, Sparkles, X, Globe, CheckCircle, Megaphone, Loader2 } from "lucide-react";
 import { useTopicVideos, INDIAN_LANGUAGES, TopicVideo } from "@/hooks/useTopicVideos";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EducationalVideoPlayerDialog } from "./player/EducationalVideoPlayerDialog";
 import { V4PlayerDialog } from "./V4PlayerDialog";
+import { V4Notes } from "./v4/V4Notes";
 
 import { extractJobIdFromUrl } from "./player/utils/mediaResolver";
 import { useLanguageTopupStatus } from "@/hooks/useLanguageTopup";
@@ -20,6 +22,7 @@ import { usePublishedAILectures, useAILectureDetails, PublishedAILecture } from 
 import { useMarkVideoWatched, useUpdateVideoWatchTime } from "@/hooks/useMarkVideoWatched";
 import type { PresentationReview } from "@/hooks/useVideoGenerationJobs";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 import type { QuickActionItem } from './player/EducationalVideoPlayerDialog';
 
@@ -169,8 +172,19 @@ export const RecordedVideos = ({
   const lectureStartTimeRef = useRef<number | null>(null);
   const currentLectureTitleRef = useRef<string | null>(null);
 
+  // "My Notes" — controlled V4 notes dialog triggered from a lecture card.
+  // We keep the *target lecture* in state so the dialog always loads the same
+  // note row the player would, and we close the dialog when the user switches
+  // to a different lecture (or any other video) so notes from one lecture
+  // never leak into another lecture's notes panel.
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notesTarget, setNotesTarget] = useState<{
+    jobId: string;
+    lectureTitle?: string;
+  } | null>(null);
+
   // Auto-open after auth: if redirected back with ?autoplay=1, open the lecture saved before login.
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const autoOpenedRef = useRef(false);
   const [legacyAutoOpen, setLegacyAutoOpen] = useState(false);
   const postLoginRefetchedRef = useRef(false);
@@ -287,6 +301,87 @@ export const RecordedVideos = ({
   }, [isAuthenticated, lecturesLoading, lecturesFetching, publishedLectures, courseId, topicId, chapterId, topicTitle, subjectId, markWatched]);
 
 
+  // "My Notes" affordance — for every published lecture, look up whether the
+  // signed-in student has ever saved a note against the same `(job_id,
+  // subject_id, chapter_id, topic_id)` tuple that V4Notes uses. We pull *all*
+  // notes for this scope in one round trip and build a Set of job ids the
+  // card can check against, instead of firing a query per card.
+  const { data: notesJobIds } = useQuery<Set<string>>({
+    queryKey: [
+      'student-lecture-notes-exists',
+      user?.id ?? null,
+      subjectId ?? null,
+      chapterId ?? null,
+      topicId ?? null,
+      (publishedLectures || []).map((l) => l.external_job_id).filter(Boolean).join(',') || null,
+    ],
+    enabled: !!user && !!topicId,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const ids = new Set<string>();
+      const jobs = (publishedLectures || [])
+        .map((l) => l.external_job_id)
+        .filter((id): id is string => !!id);
+
+      if (jobs.length === 0) return ids;
+
+      let query = supabase
+        .from('student_lecture_notes')
+        .select('job_id')
+        .eq('student_id', user!.id);
+
+      query = subjectId ? query.eq('subject_id', subjectId) : query.is('subject_id', null);
+      query = chapterId ? query.eq('chapter_id', chapterId) : query.is('chapter_id', null);
+      query = query.eq('topic_id', topicId);
+      query = query.in('job_id', jobs);
+
+      const { data, error } = await query;
+      if (error) {
+        console.error('[RecordedVideos] notes-existence lookup failed', error);
+        return ids;
+      }
+      for (const row of data || []) {
+        if (row.job_id) ids.add(row.job_id);
+      }
+      return ids;
+    },
+  });
+  // Check if there are any AI lectures (from published jobs or legacy props)
+  const hasPublishedLectures = (publishedLectures?.length ?? 0) > 0;
+  const hasLegacyAILecture = !hasPublishedLectures && (aiPresentationJson || aiGeneratedVideoUrl);
+
+  const hasLegacyNotes = useQuery<boolean>({
+    queryKey: [
+      'student-lecture-notes-exists-legacy',
+      user?.id ?? null,
+      subjectId ?? null,
+      chapterId ?? null,
+      topicId ?? null,
+      extractJobIdFromUrl(aiGeneratedVideoUrl) ?? null,
+    ],
+    enabled: !!user && !!topicId && !!hasLegacyAILecture && !!extractJobIdFromUrl(aiGeneratedVideoUrl),
+    staleTime: 30_000,
+    queryFn: async () => {
+      const legacyJobId = extractJobIdFromUrl(aiGeneratedVideoUrl);
+      if (!legacyJobId) return false;
+      let query = supabase
+        .from('student_lecture_notes')
+        .select('id')
+        .eq('student_id', user!.id)
+        .eq('job_id', legacyJobId);
+      query = subjectId ? query.eq('subject_id', subjectId) : query.is('subject_id', null);
+      query = chapterId ? query.eq('chapter_id', chapterId) : query.is('chapter_id', null);
+      query = query.eq('topic_id', topicId);
+      const { data, error } = await query.maybeSingle();
+      if (error) {
+        console.error('[RecordedVideos] legacy notes-existence lookup failed', error);
+        return false;
+      }
+      return !!data;
+    },
+  }).data === true;
+
+
   // Show unlock button only if course has multiple languages AND user hasn't purchased.
   // Hide entirely for free-preview visitors (restrictToLanguage is set) — they're on a
   // free Kannada preview and shouldn't be prompted to purchase a language pack.
@@ -349,10 +444,6 @@ export const RecordedVideos = ({
     const lang = INDIAN_LANGUAGES.find(l => l.value === langValue);
     return lang?.label || langValue;
   };
-
-  // Check if there are any AI lectures (from published jobs or legacy props)
-  const hasPublishedLectures = (publishedLectures?.length ?? 0) > 0;
-  const hasLegacyAILecture = !hasPublishedLectures && (aiPresentationJson || aiGeneratedVideoUrl);
 
   useEffect(() => {
     logPreviewReplay('render-decision', {
@@ -463,21 +554,21 @@ export const RecordedVideos = ({
                   courseAvailableLanguages={availableLanguages}
                   selectedAILanguage={selectedAILanguage}
                   onLanguageChange={setSelectedAILanguage}
-                  restrictToLanguage={restrictToLanguage ?? null}
-                  onWatch={() => {
-                    if (onRequireAuth?.()) {
-                      writePendingLecture({ courseId, topicId, chapterId, lectureId: lecture.id, language: selectedAILanguage, legacy: false }, 'published-card');
-                      return true;
-                    }
-                    const lectureTitle = topicTitle || lecture.document_name || 'AI Lecture';
-                    lectureStartTimeRef.current = Date.now();
-                    currentLectureTitleRef.current = lectureTitle;
-                    setActiveAILanguage(selectedAILanguage);
-                    setWatchingLectureId(lecture.id);
-                    return false;
-                  }}
-                  onUnlock={() => navigate(`/language-topup/${courseId}`)}
-                />
+                restrictToLanguage={restrictToLanguage ?? null}
+                onWatch={() => {
+                  if (onRequireAuth?.()) {
+                    writePendingLecture({ courseId, topicId, chapterId, lectureId: lecture.id, language: selectedAILanguage, legacy: false }, 'published-card');
+                    return true;
+                  }
+                  const lectureTitle = topicTitle || lecture.document_name || 'AI Lecture';
+                  lectureStartTimeRef.current = Date.now();
+                  currentLectureTitleRef.current = lectureTitle;
+                  setActiveAILanguage(selectedAILanguage);
+                  setWatchingLectureId(lecture.id);
+                  return false;
+                }}
+                onUnlock={() => navigate(`/language-topup/${courseId}`)}
+              />
 
               </div>
               <CheckerReviewPanel
@@ -1167,6 +1258,16 @@ const LegacyAILectureCard = ({
           </DialogContent>
         </Dialog>
       ) : null}
+    {notesOpen && notesTarget && (
+      <V4Notes
+        notesId={notesTarget.jobId}
+        subjectId={subjectId || undefined}
+        chapterId={chapterId || undefined}
+        topicId={topicId || undefined}
+        open={notesOpen}
+        onOpenChange={setNotesOpen}
+      />
+    )}
     </>
   );
 };

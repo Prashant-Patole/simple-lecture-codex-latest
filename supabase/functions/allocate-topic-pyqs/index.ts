@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, x-notes-pipeline-internal",
 };
 
 const jsonResponse = (status: number, body: unknown) =>
@@ -14,6 +14,17 @@ const jsonResponse = (status: number, body: unknown) =>
 
 const cleanJson = (value: string) =>
   value.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+
+const parseRelevantIds = (value: string) => {
+  try {
+    const parsed = JSON.parse(cleanJson(value));
+    return Array.isArray(parsed?.relevant_ids) ? parsed.relevant_ids.map(String) : [];
+  } catch {
+    // A truncated JSON response can still contain complete UUIDs. Candidate filtering below
+    // ensures that no ID outside the supplied batch can ever be allocated.
+    return value.match(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi) || [];
+  }
+};
 
 const chunksOf = <T>(items: T[], size: number) => {
   const chunks: T[][] = [];
@@ -44,25 +55,34 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const pipelineSecret = Deno.env.get("NOTES_PIPELINE_INTERNAL_SECRET") || "";
     const authorization = req.headers.get("Authorization") || "";
-
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authorization } },
-      auth: { persistSession: false },
-    });
-    const { data: authData } = await userClient.auth.getUser();
-    if (!authData.user) return jsonResponse(401, { error: "Unauthorized" });
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
     });
-    const { data: roleRow } = await admin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", authData.user.id)
-      .eq("role", "admin")
-      .maybeSingle();
-    if (!roleRow) return jsonResponse(403, { error: "Admin access required" });
+    const bearerToken = authorization.replace(/^Bearer\s+/i, "");
+    const internalToken = req.headers.get("x-notes-pipeline-internal") || "";
+    const isInternalRequest =
+      bearerToken === serviceRoleKey ||
+      (pipelineSecret.length >= 32 && internalToken === pipelineSecret);
+
+    if (!isInternalRequest) {
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authorization } },
+        auth: { persistSession: false },
+      });
+      const { data: authData } = await userClient.auth.getUser();
+      if (!authData.user) return jsonResponse(401, { error: "Unauthorized" });
+
+      const { data: roleRow } = await admin
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", authData.user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      if (!roleRow) return jsonResponse(403, { error: "Admin access required" });
+    }
 
     const body = await req.json();
     const subjectId = String(body?.subject_id || "");
@@ -125,7 +145,16 @@ Deno.serve(async (req) => {
       typeof config.openrouter_api_key !== "string" ||
       !config.openrouter_api_key
     ) {
-      return jsonResponse(503, { error: "The admin OpenRouter configuration is unavailable" });
+      return jsonResponse(200, {
+        important_questions: alreadyAllocated.map((row) => ({
+          question_type: row.question_format === "mcq" ? "mcq" : "normal",
+          question_text: row.question_text,
+        })),
+        allocated_count: alreadyAllocated.length,
+        newly_allocated_count: 0,
+        candidates_checked: candidates.length,
+        warnings: ["The admin OpenRouter configuration is unavailable; existing allocations were used."],
+      });
     }
 
     const topicContext = {
@@ -220,14 +249,19 @@ Deno.serve(async (req) => {
       }
       const result = await response.json();
       const raw = String(result.choices?.[0]?.message?.content || "");
-      const parsed = JSON.parse(cleanJson(raw));
-      return Array.isArray(parsed.relevant_ids)
-        ? parsed.relevant_ids.map(String)
-        : [];
+      return parseRelevantIds(raw);
     };
 
     const batches = chunksOf(contextCandidates, 60);
-    const classifiedIds = (await Promise.all(batches.map(classifyBatch))).flat();
+    const classificationResults = await Promise.allSettled(batches.map(classifyBatch));
+    const classifiedIds = classificationResults.flatMap((result) =>
+      result.status === "fulfilled" ? result.value : []
+    );
+    const warnings = classificationResults.flatMap((result, index) =>
+      result.status === "rejected"
+        ? [`PYQ classification batch ${index + 1} was skipped: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`]
+        : []
+    );
     const candidateIds = new Set(contextCandidates.map((row) => row.id));
     const relevantIds = [...new Set(classifiedIds)].filter((id) => candidateIds.has(id));
 
@@ -253,6 +287,7 @@ Deno.serve(async (req) => {
       newly_allocated_count: newlyAllocated.length,
       candidates_checked: candidates.length,
       model,
+      warnings,
     });
   } catch (error) {
     console.error("[allocate-topic-pyqs]", error);

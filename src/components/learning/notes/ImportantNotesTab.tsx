@@ -121,6 +121,44 @@ const QuestionCard = ({
                   <div className="prose prose-sm max-w-none text-stone-700">
                     <Markdown>{answer.answer}</Markdown>
                   </div>
+                  {(answer.key_points?.length || 0) > 0 && (
+                    <div className="mt-4 rounded-lg border border-emerald-200 bg-white/70 p-3">
+                      <p className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-800">
+                        <ListChecks className="h-4 w-4" /> Key points
+                      </p>
+                      <ul className="space-y-2 text-sm text-stone-700">
+                        {answer.key_points!.map((point, pointIndex) => (
+                          <li key={pointIndex} className="flex items-start gap-2">
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                            <Markdown inline>{point}</Markdown>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {(answer.formulas_used?.length || 0) > 0 && (
+                    <div className="mt-3 rounded-lg border bg-white/80 p-3">
+                      {answer.formulas_used!.map((formula, formulaIndex) => {
+                        const formulaText = getFormulaText(formula);
+                        return formulaText ? (
+                          <Markdown key={formulaIndex}>{`$$${formulaText.replace(/^\$+|\$+$/g, "")}$$`}</Markdown>
+                        ) : null;
+                      })}
+                    </div>
+                  )}
+                  {(answer.answer_images?.length || 0) > 0 && (
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {answer.answer_images!.map((image, imageIndex) => (
+                        <img
+                          key={`${getImageUrl(image)}-${imageIndex}`}
+                          src={getImageUrl(image)}
+                          alt={`${question.question_text || "Answer"} visual ${imageIndex + 1}`}
+                          className="max-h-72 w-full rounded-lg border bg-white object-contain"
+                          loading="lazy"
+                        />
+                      ))}
+                    </div>
+                  )}
                   {answer.memory_tip && (
                     <div className="mt-3 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
                       <Lightbulb className="mt-0.5 h-4 w-4 shrink-0" />
@@ -128,6 +166,12 @@ const QuestionCard = ({
                         <p className="font-semibold">Memory tip</p>
                         <Markdown>{answer.memory_tip}</Markdown>
                       </div>
+                    </div>
+                  )}
+                  {answer.estimated_study_time && (
+                    <div className="mt-3 flex items-center gap-2 text-xs font-medium text-stone-500">
+                      <Clock3 className="h-3.5 w-3.5" />
+                      Estimated study time: {answer.estimated_study_time}
                     </div>
                   )}
                 </div>
@@ -446,6 +490,10 @@ const TopicNotes = ({ topic }: { topic: ImportantTopicNotes }) => {
     </div>
   );
 };
+
+export const ImportantNotesPresentation = ({ topic }: { topic: ImportantTopicNotes }) => (
+  <TopicNotes topic={topic} />
+);
 
 export const ImportantNotesTab = ({
   chapterId,

@@ -15,6 +15,7 @@ import { getChromaParams, ChromaKeyParams, DEFAULT_CHROMA_PARAMS, GLChromaParams
 import { ChromaKeyTuner } from './ChromaKeyTuner';
 import { sampleAvatarGreen, autoTuneFromSample } from './utils/sampleAvatarGreen';
 import { sampleAvatarGreenSocial, autoTuneFromSocialSample } from './utils/sampleAvatarGreenSocial';
+import { V4Notes } from '../v4/V4Notes';
 
 // SSLC Social Science subject — gets its own auto-detect path (bright clean
 // green screen → wider matte + feather to eliminate the pixelated rim).
@@ -1098,6 +1099,7 @@ export const EducationalVideoPlayer = ({
 
   // ===== Auto-hiding overlay chrome (header + controls) =====
   const [chromeVisible, setChromeVisible] = useState(true);
+  const [notesOpen, setNotesOpen] = useState(false);
   const hideTimerRef = useRef<number | null>(null);
 
   const clearHideTimer = useCallback(() => {
@@ -1109,33 +1111,41 @@ export const EducationalVideoPlayer = ({
 
   const scheduleAutoHide = useCallback(() => {
     clearHideTimer();
-    if (!state.isPlaying) return;
+    if (!state.isPlaying || notesOpen) return;
     hideTimerRef.current = window.setTimeout(() => {
       setChromeVisible(false);
     }, 2500);
-  }, [state.isPlaying, clearHideTimer]);
+  }, [state.isPlaying, notesOpen, clearHideTimer]);
 
   const showChrome = useCallback(() => {
     setChromeVisible(true);
     scheduleAutoHide();
   }, [scheduleAutoHide]);
 
-  // Keep chrome visible while paused; resume auto-hide when playing.
+  // Keep chrome visible while paused or while the notebook is open.
   useEffect(() => {
-    if (state.isPlaying) {
+    if (notesOpen) {
+      clearHideTimer();
+      setChromeVisible(true);
+    } else if (state.isPlaying) {
       scheduleAutoHide();
     } else {
       clearHideTimer();
       setChromeVisible(true);
     }
     return clearHideTimer;
-  }, [state.isPlaying, scheduleAutoHide, clearHideTimer]);
+  }, [state.isPlaying, notesOpen, scheduleAutoHide, clearHideTimer]);
 
   const handleRootClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement | null;
     if (target && target.closest('.player-header, .player-controls')) {
       // Interaction inside chrome — keep visible, reset timer.
       showChrome();
+      return;
+    }
+    if (notesOpen) {
+      setChromeVisible(true);
+      clearHideTimer();
       return;
     }
     setChromeVisible((v) => {
@@ -1147,7 +1157,7 @@ export const EducationalVideoPlayer = ({
       }
       return next;
     });
-  }, [showChrome, scheduleAutoHide, clearHideTimer]);
+  }, [notesOpen, showChrome, scheduleAutoHide, clearHideTimer]);
 
   const lastMoveRef = useRef<number>(0);
   const handleRootPointerMove = useCallback(() => {
@@ -2697,6 +2707,13 @@ export const EducationalVideoPlayer = ({
         <span className="player-header-logo">📚 SimpleLectures</span>
         <span className="player-header-title">{presentationData.presentation_title}</span>
         <div className="player-header-actions">
+          <V4Notes
+            notesId={jobId}
+            subjectId={subjectId}
+            chapterId={chapterId}
+            topicId={topicId}
+            onVisibilityChange={setNotesOpen}
+          />
           <Badge className={cn("text-xs", getSectionTypeColor(currentSection?.section_type || ''))}>
             {currentSection?.section_type || 'unknown'}
           </Badge>

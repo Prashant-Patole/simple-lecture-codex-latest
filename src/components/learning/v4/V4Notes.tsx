@@ -4,18 +4,27 @@ import {
   Check,
   GripHorizontal,
   LoaderCircle,
-  Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import './v4-notes.css';
 
 interface V4NotesProps {
   notesId: string;
   subjectId?: string;
   chapterId?: string;
   topicId?: string;
+  /**
+   * When provided together with `onOpenChange`, the panel becomes controlled —
+   * `open` decides visibility and the internal toggle button is hidden so an
+   * external trigger (e.g. a "My Notes" button on a lecture card) owns the
+   * open/close lifecycle.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onVisibilityChange?: (open: boolean) => void;
 }
 
 interface DragState {
@@ -23,17 +32,6 @@ interface DragState {
   pointerY: number;
   panelX: number;
   panelY: number;
-}
-
-interface SpellingCorrection {
-  original: string;
-  replacement: string;
-  reason: string;
-}
-
-interface SpellcheckResult {
-  corrected_text: string;
-  corrections: SpellingCorrection[];
 }
 
 type SaveStatus = 'local' | 'loading' | 'saving' | 'saved' | 'error';
@@ -58,27 +56,33 @@ export function V4Notes({
   subjectId,
   chapterId,
   topicId,
+  open,
+  onOpenChange,
+  onVisibilityChange,
 }: V4NotesProps) {
   const { user } = useAuth();
   const panelRef = useRef<HTMLElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const saveTimerRef = useRef<number | null>(null);
-  const spellTimerRef = useRef<number | null>(null);
   const latestNotesRef = useRef('');
   const hasLocalChangesRef = useRef(false);
   const persistNoteRef = useRef<(content: string) => Promise<void>>(async () => {});
-  const spellRequestRef = useRef(0);
-  const lastCheckedTextRef = useRef('');
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [notes, setNotes] = useState('');
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('local');
-  const [isChecking, setIsChecking] = useState(false);
-  const [spellcheck, setSpellcheck] = useState<SpellcheckResult | null>(null);
   const [position, setPosition] = useState(() => ({
     x: Math.max(16, window.innerWidth - 430),
     y: 68,
   }));
+
+  const isControlled = open !== undefined && onOpenChange !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
+  const setIsOpen = isControlled ? onOpenChange : setInternalOpen;
+
+  useEffect(() => {
+    onVisibilityChange?.(isOpen);
+  }, [isOpen, onVisibilityChange]);
 
   const storageKey = getStorageKey(notesId, user?.id);
 
@@ -128,7 +132,6 @@ export function V4Notes({
     setNotes(value);
     latestNotesRef.current = value;
     hasLocalChangesRef.current = true;
-    setSpellcheck(null);
     try {
       localStorage.setItem(storageKey, value);
     } catch {
@@ -140,7 +143,6 @@ export function V4Notes({
   useEffect(() => {
     let cancelled = false;
     hasLocalChangesRef.current = false;
-    setSpellcheck(null);
     setSaveStatus(user ? 'loading' : 'local');
 
     let cached = '';
@@ -236,48 +238,14 @@ export function V4Notes({
   }, [isOpen]);
 
   useEffect(() => {
-    if (spellTimerRef.current) window.clearTimeout(spellTimerRef.current);
-    const text = notes;
-    if (!user || text.trim().length < 8 || text === lastCheckedTextRef.current) {
-      setIsChecking(false);
-      return;
-    }
-
-    setIsChecking(true);
-    const requestId = ++spellRequestRef.current;
-    spellTimerRef.current = window.setTimeout(async () => {
-      const { data, error } = await supabase.functions.invoke('student-note-spellcheck', {
-        body: { text },
-      });
-      if (requestId !== spellRequestRef.current) return;
-      setIsChecking(false);
-      lastCheckedTextRef.current = text;
-
-      if (error) {
-        console.warn('[V4Notes] spellcheck unavailable', error);
-        return;
-      }
-
-      const result = data as SpellcheckResult;
-      setSpellcheck(
-        result?.corrected_text &&
-          result.corrected_text !== text &&
-          Array.isArray(result.corrections) &&
-          result.corrections.length
-          ? result
-          : null,
-      );
-    }, 1200);
-
-    return () => {
-      if (spellTimerRef.current) window.clearTimeout(spellTimerRef.current);
-    };
-  }, [notes, user]);
+    if (!isOpen) return;
+    const frame = window.requestAnimationFrame(() => textareaRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [isOpen]);
 
   useEffect(
     () => () => {
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-      if (spellTimerRef.current) window.clearTimeout(spellTimerRef.current);
       if (hasLocalChangesRef.current) {
         void persistNoteRef.current(latestNotesRef.current);
       }
@@ -310,16 +278,18 @@ export function V4Notes({
 
   return (
     <>
-      <button
-        aria-expanded={isOpen}
-        className={`v4-notes-button${isOpen ? ' is-active' : ''}`}
-        onClick={() => setIsOpen((open) => !open)}
-        title="Open lecture notes"
-        type="button"
-      >
-        <BookOpen size={15} />
-        <span>Notes</span>
-      </button>
+      {!isControlled && (
+        <button
+          aria-expanded={isOpen}
+          className={`v4-notes-button${isOpen ? ' is-active' : ''}`}
+          onClick={() => setIsOpen((open) => !open)}
+          title="Open lecture notes"
+          type="button"
+        >
+          <BookOpen size={15} />
+          <span>Notes</span>
+        </button>
+      )}
 
       {isOpen && (
         <aside
@@ -377,52 +347,6 @@ export function V4Notes({
               value={notes}
             />
           </div>
-
-          {(isChecking || spellcheck) && (
-            <section className="v4-notes__spellcheck" aria-live="polite">
-              <div className="v4-notes__spellcheck-title">
-                {isChecking ? (
-                  <>
-                    <LoaderCircle className="is-spinning" size={14} />
-                    Checking spelling...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={14} />
-                    Suggested corrections
-                  </>
-                )}
-              </div>
-              {spellcheck && (
-                <>
-                  <div className="v4-notes__corrections">
-                    {spellcheck.corrections.slice(0, 4).map((correction, index) => (
-                      <span key={`${correction.original}-${index}`}>
-                        <s>{correction.original}</s>
-                        <b>{correction.replacement}</b>
-                      </span>
-                    ))}
-                  </div>
-                  <div className="v4-notes__spellcheck-actions">
-                    <button
-                      onClick={() => {
-                        lastCheckedTextRef.current = spellcheck.corrected_text;
-                        updateNotes(spellcheck.corrected_text);
-                        setSpellcheck(null);
-                      }}
-                      type="button"
-                    >
-                      <Check size={13} />
-                      Apply correction
-                    </button>
-                    <button onClick={() => setSpellcheck(null)} type="button">
-                      Ignore
-                    </button>
-                  </div>
-                </>
-              )}
-            </section>
-          )}
 
           <footer className="v4-notes__footer">
             <span className={`v4-notes__save-status is-${saveStatus}`}>

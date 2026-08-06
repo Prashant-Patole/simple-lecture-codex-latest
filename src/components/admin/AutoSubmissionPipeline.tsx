@@ -24,6 +24,8 @@ import {
   type AutoSubmissionItemStatus,
 } from "@/hooks/useActiveAutoSubmissionRun";
 
+import { MarketingPayloadConfigCard, type MarketingPayloadConfig } from "./MarketingPayloadConfigCard";
+
 interface Props {
   subjectId: string;
   subjectName: string;
@@ -71,6 +73,7 @@ export function AutoSubmissionPipeline({ subjectId, subjectName, serverIp, kind 
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState<"markdown" | "json">("markdown");
   const [starting, setStarting] = useState(false);
+  const [marketingConfig, setMarketingConfig] = useState<MarketingPayloadConfig | null>(null);
 
   const { data: chapters } = useSubjectChapters(subjectId);
   const { data: topics } = useChapterTopics(selectedChapterId || undefined);
@@ -140,6 +143,18 @@ export function AutoSubmissionPipeline({ subjectId, subjectName, serverIp, kind 
         markdown: d.markdown,
         status: "queued",
       }));
+
+      // Combine base pipelineConfig with user-selected marketing payload config if in marketing mode
+      const effectivePipelineConfig = kind === "marketing" ? {
+        ...(pipelineConfig || {}),
+        ...(marketingConfig ? {
+          avatar_id: marketingConfig.avatar_id,
+          target_languages: marketingConfig.target_languages,
+          avatar_speaker: marketingConfig.avatar_speaker,
+          llm_routing: marketingConfig.llm_routing,
+        } : {}),
+      } : (pipelineConfig ?? null);
+
       const { data: { user } } = await supabase.auth.getUser();
       const { error } = await supabase.from("auto_submission_runs" as any).insert([{
         subject_id: subjectId,
@@ -150,13 +165,12 @@ export function AutoSubmissionPipeline({ subjectId, subjectName, serverIp, kind 
         current_index: 0,
         created_by: user?.id,
         kind,
-        pipeline_config: pipelineConfig ?? null,
+        pipeline_config: effectivePipelineConfig,
       }]);
       if (error) throw error;
       // Kick off immediately so user doesn't wait for cron
       supabase.functions.invoke("auto-submission-tick").catch(() => {});
       toast.success("Pipeline started — it will keep running on the server.");
-      ;
       setSelectedDocs({});
     } catch (e: any) {
       toast.error(e?.message || "Failed to start pipeline");
@@ -185,6 +199,14 @@ export function AutoSubmissionPipeline({ subjectId, subjectName, serverIp, kind 
 
   return (
     <div className="space-y-4">
+      {/* Render Marketing Video Payload Config Card ONLY in Marketing mode */}
+      {kind === "marketing" && (
+        <MarketingPayloadConfigCard
+          subjectId={subjectId}
+          subjectName={subjectName}
+          onChange={setMarketingConfig}
+        />
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <Select value={selectedChapterId ?? "all"} onValueChange={v => setSelectedChapterId(v === "all" ? null : v)}>
           <SelectTrigger className="w-[220px]"><SelectValue placeholder="Chapter" /></SelectTrigger>

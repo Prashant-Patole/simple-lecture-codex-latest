@@ -37,11 +37,8 @@ verify_jwt = true
 [functions.ai-compare-math-answers]
 verify_jwt = true
 
-[functions.student-note-spellcheck]
-verify_jwt = true
-
 [functions.allocate-topic-pyqs]
-verify_jwt = true
+verify_jwt = false
 
 [functions.ai-generate-dpp]
 verify_jwt = true
@@ -170,6 +167,9 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.ai-teaching-proxy]
+verify_jwt = false
+
+[functions.notes-auto-pipeline]
 verify_jwt = false
 
 [functions.save-presentation-audio]

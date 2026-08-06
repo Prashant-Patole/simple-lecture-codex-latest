@@ -1060,12 +1060,13 @@ export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '6
               avatar_language: "english",
               target_languages: ["kannada", "hindi"],
               llm_routing: {
-                chunker: "openrouter",
-                director: "openrouter",
+                chunker: "local",
+                director: "local",
                 manim_renderer: "openrouter",
-                remotion_renderer: "openrouter",
-                video_renderer: "openrouter",
-                prompt_enhancer: "openrouter",
+                remotion_renderer: "local",
+                video_renderer: "local",
+                prompt_enhancer: "local",
+                story_enhancer: "local",
               },
             }}
           />

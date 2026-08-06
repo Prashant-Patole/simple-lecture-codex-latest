@@ -67,6 +67,19 @@ export function SubjectReelsTab({ subjectId }: Props) {
     enabled: !!subjectId,
   });
 
+  const { data: avatarConfig } = useQuery({
+    queryKey: ["reel-subject-avatar-config"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ai_settings")
+        .select("setting_value")
+        .eq("setting_key", "marketing_avatar_config")
+        .maybeSingle();
+      if (error) throw error;
+      return data?.setting_value as Record<string, any> | null;
+    },
+  });
+
   const qc = useQueryClient();
   const { data: reelJobs = [] } = useReelJobs(subjectId);
 
@@ -96,14 +109,18 @@ export function SubjectReelsTab({ subjectId }: Props) {
         skip_threejs: false,
         avatar_language: "english",
         llm_routing: {
-          chunker: "local",
-          director: "local",
+          chunker: "openrouter",
+          director: "openrouter",
           manim_renderer: "openrouter",
-          remotion_renderer: "local",
-          video_renderer: "local",
-          prompt_enhancer: "local",
+          remotion_renderer: "openrouter",
+          video_renderer: "openrouter",
+          prompt_enhancer: "openrouter",
         },
       };
+      const subjectAvatarId = avatarConfig?.subjects?.[
+        String(subject?.name || "").trim().toLowerCase()
+      ]?.avatar_id;
+      if (subjectAvatarId) payload.avatar_id = subjectAvatarId;
       if (d.source_url) {
         payload.document_url = d.source_url;
         payload.file_name = d.file_name || d.display_name || "document";

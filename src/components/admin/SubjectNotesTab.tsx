@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   BookOpenText,
   CheckCircle2,
   ClipboardCopy,
   FileJson,
+  ListChecks,
   Loader2,
   Play,
+  Presentation,
   RefreshCw,
   RotateCcw,
   Send,
@@ -20,8 +22,17 @@ import { toast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
@@ -32,6 +43,8 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { ImportantNotesPresentation } from "@/components/learning/notes/ImportantNotesTab";
+import type { ImportantTopicNotes } from "@/hooks/useImportantNotes";
 
 interface SubjectNotesTabProps {
   subjectId: string;
@@ -127,10 +140,61 @@ const findDocumentId = (value: any): string | null => {
   return null;
 };
 
+const safeJsonStringify = (value: unknown) => {
+  const depths = new WeakMap<object, number>();
+  const seen = new WeakSet<object>();
+  return JSON.stringify(
+    value,
+    function (_key, nestedValue) {
+      if (!nestedValue || typeof nestedValue !== "object") return nestedValue;
+      if (seen.has(nestedValue)) return "[Circular data omitted]";
+      const parentDepth = this && typeof this === "object" ? depths.get(this) || 0 : 0;
+      if (parentDepth >= 8) return "[Deeply nested data omitted]";
+      seen.add(nestedValue);
+      depths.set(nestedValue, parentDepth + 1);
+      return nestedValue;
+    },
+    2,
+  );
+};
+
+const jobStatusLabel = (status: string) => {
+  if (status === "submitted") return "Completed";
+  if (status === "processing") return "Generating";
+  if (status === "queued") return "Queued";
+  if (status === "failed") return "Failed";
+  if (status === "stopped") return "Stopped";
+  return status;
+};
+
+const getPresentationTopic = (job: any): ImportantTopicNotes | null => {
+  const storedTopics = Array.isArray(job?.final_response?.topics) ? job.final_response.topics : [];
+  const response = storedTopics.find((item: any) => item?.response)?.response;
+  if (!response || typeof response !== "object") return null;
+  const answers = Array.isArray(response.question_answers) ? response.question_answers : [];
+  const questions = Array.isArray(response.questions) && response.questions.length > 0
+    ? response.questions
+    : answers.map((answer: any, index: number) => ({
+        id: answer.question_id || `generated-question-${index}`,
+        question_text: answer.question_text || `Question ${index + 1}`,
+        question_format: answer.format || "long_answer",
+        difficulty: answer.difficulty,
+      }));
+  return {
+    ...response,
+    topic_note_id: response.topic_note_id || storedTopics[0]?.topic_note_id || job.id,
+    topic_id: response.topic_id || job.topic_id,
+    topic_number: response.topic_number || job.topic_number,
+    topic_title: response.topic_title || job.topic_title,
+    questions,
+    question_answers: answers,
+  } as ImportantTopicNotes;
+};
+
 const JsonView = ({ value, empty = "No data loaded." }: { value: unknown; empty?: string }) => (
   <ScrollArea className="h-[440px] rounded-md border bg-slate-950">
     <pre className="p-4 text-xs text-slate-100 whitespace-pre-wrap break-words">
-      {value ? JSON.stringify(value, null, 2) : empty}
+      {value ? safeJsonStringify(value) : empty}
     </pre>
   </ScrollArea>
 );
@@ -140,8 +204,12 @@ export function SubjectNotesTab({
   subjectName,
   subjectSlug,
 }: SubjectNotesTabProps) {
+  const queryClient = useQueryClient();
   const [chapterId, setChapterId] = useState("");
   const [topicId, setTopicId] = useState("");
+  const [pipelineTopicIds, setPipelineTopicIds] = useState<string[]>([]);
+  const [jobsOpen, setJobsOpen] = useState(false);
+  const [presentationJob, setPresentationJob] = useState<any>(null);
   const [apiBase, setApiBase] = useState(() => {
     if (typeof window === "undefined") return DEFAULT_API_BASE;
     return localStorage.getItem(API_STORAGE_KEY) || DEFAULT_API_BASE;
@@ -163,6 +231,10 @@ export function SubjectNotesTab({
   useEffect(() => {
     localStorage.setItem(API_STORAGE_KEY, apiBase);
   }, [apiBase]);
+
+  useEffect(() => {
+    setPipelineTopicIds([]);
+  }, [subjectId]);
 
   const { data: chapters = [], isLoading: chaptersLoading } = useQuery({
     queryKey: ["subject-notes-chapters", subjectId],
@@ -191,6 +263,41 @@ export function SubjectNotesTab({
       return data || [];
     },
   });
+
+  const pipelineRunsQuery = useQuery({
+    queryKey: ["notes-auto-pipeline-runs", subjectId],
+    enabled: !!subjectId,
+    refetchInterval: 3000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("notes_auto_pipeline_runs" as any)
+        .select("*")
+        .eq("subject_id", subjectId)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return (data || []) as any[];
+    },
+  });
+
+  const pipelineJobsQuery = useQuery({
+    queryKey: ["notes-auto-pipeline-jobs", subjectId],
+    enabled: !!subjectId,
+    refetchInterval: jobsOpen ? 3000 : false,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("notes_auto_pipeline_items" as any)
+        .select("*, run:notes_auto_pipeline_runs!inner(id, status, api_base, created_at, completed_at, error_message)")
+        .eq("subject_id", subjectId)
+        .order("created_at", { ascending: false })
+        .order("sequence_order", { ascending: true });
+      if (error) throw error;
+      return (data || []) as any[];
+    },
+  });
+
+  const activePipelineRun = pipelineRunsQuery.data?.find((run: any) => run.status === "running");
+  const latestPipelineRun = pipelineRunsQuery.data?.[0];
 
   const selectedChapter = chapters.find((chapter: any) => chapter.id === chapterId);
   const selectedTopic = topics.find((topic: any) => topic.id === topicId);
@@ -502,20 +609,102 @@ export function SubjectNotesTab({
       );
     });
 
+  const togglePipelineTopic = (selectedTopicId: string) => {
+    setPipelineTopicIds((current) =>
+      current.includes(selectedTopicId)
+        ? current.filter((id) => id !== selectedTopicId)
+        : [...current, selectedTopicId],
+    );
+  };
+
+  const selectCurrentChapterTopics = () => {
+    setPipelineTopicIds((current) => [
+      ...current,
+      ...topics
+        .map((topic: any) => topic.id)
+        .filter((currentTopicId: string) => !current.includes(currentTopicId)),
+    ]);
+  };
+
+  const clearCurrentChapterTopics = () => {
+    const currentChapterTopicIds = new Set(topics.map((topic: any) => topic.id));
+    setPipelineTopicIds((current) =>
+      current.filter((selectedTopicId) => !currentChapterTopicIds.has(selectedTopicId)),
+    );
+  };
+
+  const startSelectedTopicsPipeline = () =>
+    runAction("auto-pipeline-start", async () => {
+      if (pipelineTopicIds.length === 0) throw new Error("Select at least one topic");
+      const { data, error } = await supabase.functions.invoke("notes-auto-pipeline", {
+        body: {
+          action: "start",
+          subject_id: subjectId,
+          topic_ids: pipelineTopicIds,
+          api_base: apiBase,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setPipelineTopicIds([]);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["notes-auto-pipeline-runs", subjectId] }),
+        queryClient.invalidateQueries({ queryKey: ["notes-auto-pipeline-jobs", subjectId] }),
+      ]);
+      toast({
+        title: "Server pipeline started",
+        description: data?.message || `${pipelineTopicIds.length} topics queued.`,
+      });
+    });
+
+  const stopSelectedTopicsPipeline = () =>
+    runAction("auto-pipeline-stop", async () => {
+      if (!activePipelineRun?.id) throw new Error("No Notes pipeline is currently running");
+      const { data, error } = await supabase.functions.invoke("notes-auto-pipeline", {
+        body: {
+          action: "stop",
+          run_id: activePipelineRun.id,
+          subject_id: subjectId,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["notes-auto-pipeline-runs", subjectId] }),
+        queryClient.invalidateQueries({ queryKey: ["notes-auto-pipeline-jobs", subjectId] }),
+      ]);
+      toast({ title: "Pipeline stopped", description: "Queued topics will not be submitted." });
+    });
+
   const dataLoading = documentLoading || questionsLoading || importantQuery.isLoading;
+  const pipelineProgress = latestPipelineRun?.total_items
+    ? Math.round((latestPipelineRun.completed_items / latestPipelineRun.total_items) * 100)
+    : 0;
 
   return (
     <div className="space-y-6">
       <Card className="border-emerald-200/70">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BookOpenText className="h-5 w-5 text-emerald-600" />
-            Notes Generation
-          </CardTitle>
-          <CardDescription>
-            Select a chapter and topic to assemble parsed textbook content, normal questions,
-            and context-matched PYQs into the Notes import payload.
-          </CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <BookOpenText className="h-5 w-5 text-emerald-600" />
+                Notes Generation
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Select a chapter and topic to inspect one payload, or queue multiple topics below.
+              </CardDescription>
+            </div>
+            <Button variant="outline" onClick={() => setJobsOpen(true)}>
+              <ListChecks className="mr-2 h-4 w-4" />
+              View all jobs
+              {!!pipelineJobsQuery.data?.length && (
+                <Badge variant="secondary" className="ml-2">
+                  {pipelineJobsQuery.data.length}
+                </Badge>
+              )}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="grid gap-4 md:grid-cols-2">
@@ -608,6 +797,132 @@ export function SubjectNotesTab({
                 <RefreshCw className="mr-2 h-3.5 w-3.5" />
                 Retry
               </Button>
+            </div>
+          )}
+
+          {chapterId && (
+            <div className="space-y-4 rounded-xl border border-emerald-200 bg-emerald-50/40 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold text-emerald-950">Selected-topic auto pipeline</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Topics run sequentially on Supabase. The queue stops immediately if an import or
+                    generation request does not return HTTP 200.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={selectCurrentChapterTopics}
+                    disabled={topics.length === 0 || !!activePipelineRun}
+                  >
+                    Select all
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={clearCurrentChapterTopics}
+                    disabled={
+                      !topics.some((topic: any) => pipelineTopicIds.includes(topic.id)) ||
+                      !!activePipelineRun
+                    }
+                  >
+                    Clear chapter
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPipelineTopicIds([])}
+                    disabled={pipelineTopicIds.length === 0 || !!activePipelineRun}
+                  >
+                    Clear all
+                  </Button>
+                </div>
+              </div>
+
+              <ScrollArea className="max-h-60 rounded-lg border bg-background">
+                <div className="grid gap-1 p-2 sm:grid-cols-2">
+                  {topics.map((topic: any) => (
+                    <label
+                      key={topic.id}
+                      className="flex cursor-pointer items-start gap-3 rounded-md p-3 hover:bg-muted/60"
+                    >
+                      <Checkbox
+                        checked={pipelineTopicIds.includes(topic.id)}
+                        onCheckedChange={() => togglePipelineTopic(topic.id)}
+                        disabled={!!activePipelineRun}
+                      />
+                      <span className="text-sm leading-tight">
+                        <strong className="mr-1">{topic.topic_number}</strong>
+                        {topic.title}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </ScrollArea>
+
+              {latestPipelineRun && (
+                <div className="space-y-2 rounded-lg border bg-background p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant={
+                          latestPipelineRun.status === "failed"
+                            ? "destructive"
+                            : latestPipelineRun.status === "completed"
+                              ? "default"
+                              : "secondary"
+                        }
+                      >
+                        {latestPipelineRun.status}
+                      </Badge>
+                      <span>
+                        {latestPipelineRun.completed_items}/{latestPipelineRun.total_items} completed
+                      </span>
+                    </div>
+                    {latestPipelineRun.error_message && (
+                      <span className="text-sm text-destructive">{latestPipelineRun.error_message}</span>
+                    )}
+                  </div>
+                  <Progress value={pipelineProgress} className="h-2" />
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-sm font-medium">
+                  {pipelineTopicIds.length} topics selected across chapters
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="destructive"
+                    onClick={stopSelectedTopicsPipeline}
+                    disabled={!activePipelineRun || busyAction === "auto-pipeline-stop"}
+                  >
+                    {busyAction === "auto-pipeline-stop" ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Square className="mr-2 h-4 w-4" />
+                    )}
+                    Stop pipeline
+                  </Button>
+                  <Button
+                    onClick={startSelectedTopicsPipeline}
+                    disabled={
+                      pipelineTopicIds.length === 0 ||
+                      !!activePipelineRun ||
+                      busyAction === "auto-pipeline-start"
+                    }
+                  >
+                    {busyAction === "auto-pipeline-start" ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Play className="mr-2 h-4 w-4" />
+                    )}
+                    Start pipeline
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </CardContent>
@@ -802,6 +1117,241 @@ export function SubjectNotesTab({
           {logsResult && <JsonView value={logsResult} />}
         </CardContent>
       </Card>
+
+      <Dialog open={jobsOpen} onOpenChange={setJobsOpen}>
+        <DialogContent className="max-h-[90vh] max-w-5xl overflow-hidden p-0">
+          <DialogHeader className="border-b px-6 py-5">
+            <div className="flex items-start justify-between gap-4 pr-8">
+              <div>
+                <DialogTitle>All Notes jobs - {subjectName || "Subject"}</DialogTitle>
+                <DialogDescription className="mt-1">
+                  Every selected topic, the exact payload sent, HTTP statuses, and final API responses.
+                </DialogDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  await supabase.functions.invoke("notes-auto-pipeline", {
+                    body: { action: "tick" },
+                  });
+                  await Promise.all([
+                    pipelineJobsQuery.refetch(),
+                    pipelineRunsQuery.refetch(),
+                  ]);
+                }}
+                disabled={pipelineJobsQuery.isFetching}
+              >
+                <RefreshCw
+                  className={`mr-2 h-4 w-4 ${pipelineJobsQuery.isFetching ? "animate-spin" : ""}`}
+                />
+                Refresh
+              </Button>
+            </div>
+          </DialogHeader>
+
+          <ScrollArea className="h-[72vh] px-6 py-4">
+            {pipelineJobsQuery.isLoading && (
+              <div className="grid min-h-48 place-items-center">
+                <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
+              </div>
+            )}
+            {!pipelineJobsQuery.isLoading && !pipelineJobsQuery.data?.length && (
+              <div className="grid min-h-48 place-items-center rounded-lg border border-dashed text-sm text-muted-foreground">
+                No Notes pipeline jobs have been submitted for this subject.
+              </div>
+            )}
+            <div className="space-y-3 pb-4">
+              {pipelineJobsQuery.data?.map((job: any) => {
+                const progressStatus =
+                  job.generation_response?.latest_status ||
+                  job.generation_response?.final_status ||
+                  null;
+                const topicsDone = Number(progressStatus?.topics_done || 0);
+                const topicsPending = Number(progressStatus?.topics_pending || 0);
+                const topicsFailed = Number(progressStatus?.topics_failed || 0);
+                const progressTotal = topicsDone + topicsPending + topicsFailed;
+                const progressValue = progressTotal > 0 ? (topicsDone / progressTotal) * 100 : 0;
+                return (
+                <article key={job.id} className="rounded-xl border bg-card p-4 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge
+                          variant={
+                            job.status === "failed"
+                              ? "destructive"
+                              : job.status === "submitted"
+                                ? "default"
+                                : "secondary"
+                          }
+                        >
+                          {jobStatusLabel(job.status)}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          Run #{String(job.run_id).slice(0, 8)} / Item {job.sequence_order}
+                        </span>
+                      </div>
+                      <h3 className="mt-2 font-semibold">
+                        {job.chapter_number}. {job.chapter_title}
+                      </h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {job.topic_number} {job.topic_title}
+                      </p>
+                    </div>
+                    <div className="text-right text-xs text-muted-foreground">
+                      <div>{new Date(job.created_at).toLocaleString()}</div>
+                      <div className="mt-1 font-mono">Document: {job.external_document_id || "pending"}</div>
+                    </div>
+                  </div>
+
+                  {job.status === "processing" && (
+                    <div className="mt-4 space-y-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-blue-900">
+                        <span className="flex items-center gap-2 font-medium">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Notes generation is in progress
+                        </span>
+                        <span>
+                          Done {topicsDone} / Pending {topicsPending} / Failed {topicsFailed}
+                        </span>
+                      </div>
+                      <Progress value={progressValue} className="h-2" />
+                    </div>
+                  )}
+
+                  {job.status === "queued" && (
+                    <div className="mt-4 rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
+                      Waiting in queue. This topic starts after the current job completes.
+                    </div>
+                  )}
+
+                  {job.status === "submitted" && (
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-800">
+                      <span className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4" />
+                        Job completed. The generated Notes response is available below.
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="bg-emerald-800 text-white hover:bg-emerald-700"
+                        disabled={!getPresentationTopic(job)}
+                        onClick={() => {
+                          setJobsOpen(false);
+                          setPresentationJob(job);
+                        }}
+                      >
+                        <Presentation className="mr-2 h-4 w-4" />
+                        View presentation
+                      </Button>
+                    </div>
+                  )}
+
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                    <Badge variant="outline">
+                      Import HTTP: {job.import_http_status ?? "-"}
+                    </Badge>
+                    <Badge variant="outline">
+                      Generate HTTP: {job.generation_http_status ?? "-"}
+                    </Badge>
+                    <Badge variant="outline">Attempts: {job.attempts}</Badge>
+                  </div>
+
+                  {job.error_message && (
+                    <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                      {job.error_message}
+                    </div>
+                  )}
+
+                  <details className="mt-3 rounded-lg border bg-muted/20">
+                    <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
+                      View payload, progress and generated response
+                    </summary>
+                    <div className="grid gap-3 border-t p-3 lg:grid-cols-2">
+                      <div>
+                        <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                          Submitted payload
+                        </div>
+                        <pre className="max-h-80 overflow-auto rounded-md bg-slate-950 p-3 text-[11px] text-slate-100 whitespace-pre-wrap break-words">
+                          {job.payload ? safeJsonStringify(job.payload) : "Payload not built yet."}
+                        </pre>
+                      </div>
+                      <div>
+                        <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                          Import response
+                        </div>
+                        <pre className="max-h-80 overflow-auto rounded-md bg-slate-950 p-3 text-[11px] text-slate-100 whitespace-pre-wrap break-words">
+                          {job.import_response
+                            ? safeJsonStringify(job.import_response)
+                            : "No import response yet."}
+                        </pre>
+                      </div>
+                      <div>
+                        <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                          Generation status
+                        </div>
+                        <pre className="max-h-80 overflow-auto rounded-md bg-slate-950 p-3 text-[11px] text-slate-100 whitespace-pre-wrap break-words">
+                          {job.generation_response
+                            ? safeJsonStringify(job.generation_response)
+                            : "No generation response yet."}
+                        </pre>
+                      </div>
+                      <div className="lg:col-span-2">
+                        <div className="mb-2 flex items-center justify-between gap-2 text-xs font-semibold uppercase text-muted-foreground">
+                          <span>Complete generated Notes response</span>
+                          <Badge variant="outline">
+                            HTTP {job.final_response_http_status ?? "-"}
+                          </Badge>
+                        </div>
+                        <pre className="max-h-[520px] overflow-auto rounded-md bg-slate-950 p-3 text-[11px] text-slate-100 whitespace-pre-wrap break-words">
+                          {job.final_response
+                            ? safeJsonStringify(job.final_response)
+                            : job.status === "submitted"
+                              ? "The completed response is being synchronized from the Notes server."
+                              : "The generated response will appear here after the job completes."}
+                        </pre>
+                      </div>
+                    </div>
+                  </details>
+                </article>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!presentationJob}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPresentationJob(null);
+            setJobsOpen(true);
+          }
+        }}
+      >
+        <DialogContent className="h-[96vh] w-[96vw] max-w-[1500px] overflow-hidden p-0">
+          <DialogHeader className="border-b bg-emerald-950 px-6 py-4 text-white">
+            <DialogTitle className="flex items-center gap-2 text-xl text-white">
+              <Presentation className="h-5 w-5" />
+              {presentationJob?.topic_number} {presentationJob?.topic_title}
+            </DialogTitle>
+            <DialogDescription className="text-emerald-100">
+              Generated notes, illustrations, formulas, questions, answers, and memory tips.
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-[calc(96vh-86px)] bg-[#f4f0e4] p-4 sm:p-6">
+            {presentationJob && getPresentationTopic(presentationJob) ? (
+              <ImportantNotesPresentation topic={getPresentationTopic(presentationJob)!} />
+            ) : (
+              <div className="grid min-h-96 place-items-center text-sm text-muted-foreground">
+                Presentation data is unavailable for this job.
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

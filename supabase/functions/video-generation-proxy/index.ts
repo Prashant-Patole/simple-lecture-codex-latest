@@ -758,7 +758,7 @@ Deno.serve(async (req) => {
       // Story-mode fields
       story_hint, avatar_speaker,
       // Marketing / advanced overrides
-      no_quiz, image_provider, image_model,
+      no_quiz, image_provider, image_model, avatar_id,
     } = body;
 
     // Get dynamic API base URLs from server_ip parameter
@@ -972,6 +972,30 @@ Deno.serve(async (req) => {
       formData.append('image_model', image_model || 'flux_dev');
       if (no_quiz !== undefined) formData.append('no_quiz', String(no_quiz));
       if (avatar_speaker) formData.append('avatar_speaker', String(avatar_speaker));
+
+      let resolvedAvatarId = avatar_id ? String(avatar_id) : '';
+      const isReelSubmission = Number(target_port) === 5006 && reel_with_avatar === true && reel_variant !== 'story';
+      if (!resolvedAvatarId && isReelSubmission && subject) {
+        const admin = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+          { auth: { persistSession: false } },
+        );
+        const { data: avatarConfigRow, error: avatarConfigError } = await admin
+          .from('ai_settings')
+          .select('setting_value')
+          .eq('setting_key', 'marketing_avatar_config')
+          .maybeSingle();
+        if (avatarConfigError) {
+          console.warn('[submit:reel] Unable to load subject avatar config', avatarConfigError);
+        } else {
+          const config = avatarConfigRow?.setting_value as Record<string, unknown> | null;
+          const subjects = config?.subjects as Record<string, Record<string, unknown>> | undefined;
+          const configuredAvatarId = subjects?.[String(subject).trim().toLowerCase()]?.avatar_id;
+          if (configuredAvatarId) resolvedAvatarId = String(configuredAvatarId);
+        }
+      }
+      if (resolvedAvatarId) formData.append('avatar_id', resolvedAvatarId);
 
       // Reel-mode optional fields (only appended when explicitly provided)
       if (audio_only !== undefined) formData.append('audio_only', String(audio_only));
