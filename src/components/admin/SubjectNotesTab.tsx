@@ -8,7 +8,9 @@ import {
   FileJson,
   ListChecks,
   Loader2,
+  PauseCircle,
   Play,
+  PlayCircle,
   Presentation,
   RefreshCw,
   RotateCcw,
@@ -296,7 +298,10 @@ export function SubjectNotesTab({
     },
   });
 
-  const activePipelineRun = pipelineRunsQuery.data?.find((run: any) => run.status === "running");
+  const activePipelineRun = pipelineRunsQuery.data?.find(
+    (run: any) => run.status === "running" || run.status === "paused",
+  );
+  const isPipelinePaused = activePipelineRun?.status === "paused";
   const latestPipelineRun = pipelineRunsQuery.data?.[0];
 
   const selectedChapter = chapters.find((chapter: any) => chapter.id === chapterId);
@@ -657,6 +662,50 @@ export function SubjectNotesTab({
       });
     });
 
+  const pauseSelectedTopicsPipeline = () =>
+    runAction("auto-pipeline-pause", async () => {
+      if (!activePipelineRun?.id) throw new Error("No Notes pipeline is currently active");
+      const { data, error } = await supabase.functions.invoke("notes-auto-pipeline", {
+        body: {
+          action: "pause",
+          run_id: activePipelineRun.id,
+          subject_id: subjectId,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["notes-auto-pipeline-runs", subjectId] }),
+        queryClient.invalidateQueries({ queryKey: ["notes-auto-pipeline-jobs", subjectId] }),
+      ]);
+      toast({
+        title: "Pipeline paused",
+        description: "Current in-progress job will finish generation, but next jobs will not be submitted until resumed.",
+      });
+    });
+
+  const resumeSelectedTopicsPipeline = () =>
+    runAction("auto-pipeline-resume", async () => {
+      if (!activePipelineRun?.id) throw new Error("No Notes pipeline is currently active");
+      const { data, error } = await supabase.functions.invoke("notes-auto-pipeline", {
+        body: {
+          action: "resume",
+          run_id: activePipelineRun.id,
+          subject_id: subjectId,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["notes-auto-pipeline-runs", subjectId] }),
+        queryClient.invalidateQueries({ queryKey: ["notes-auto-pipeline-jobs", subjectId] }),
+      ]);
+      toast({
+        title: "Pipeline resumed",
+        description: "Queued jobs will now resume submitting one by one.",
+      });
+    });
+
   const stopSelectedTopicsPipeline = () =>
     runAction("auto-pipeline-stop", async () => {
       if (!activePipelineRun?.id) throw new Error("No Notes pipeline is currently running");
@@ -872,7 +921,14 @@ export function SubjectNotesTab({
                             ? "destructive"
                             : latestPipelineRun.status === "completed"
                               ? "default"
-                              : "secondary"
+                              : latestPipelineRun.status === "paused"
+                                ? "outline"
+                                : "secondary"
+                        }
+                        className={
+                          latestPipelineRun.status === "paused"
+                            ? "border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-950/50"
+                            : ""
                         }
                       >
                         {latestPipelineRun.status}
@@ -886,6 +942,11 @@ export function SubjectNotesTab({
                     )}
                   </div>
                   <Progress value={pipelineProgress} className="h-2" />
+                  {latestPipelineRun.status === "paused" && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 font-medium pt-1">
+                      ⏸️ Pipeline is paused. The currently generating job will finish, but remaining queued jobs will not be submitted until you click Resume.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -893,7 +954,38 @@ export function SubjectNotesTab({
                 <span className="text-sm font-medium">
                   {pipelineTopicIds.length} topics selected across chapters
                 </span>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {activePipelineRun && (
+                    isPipelinePaused ? (
+                      <Button
+                        onClick={resumeSelectedTopicsPipeline}
+                        disabled={busyAction === "auto-pipeline-resume"}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                      >
+                        {busyAction === "auto-pipeline-resume" ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <PlayCircle className="mr-2 h-4 w-4" />
+                        )}
+                        Resume pipeline
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        onClick={pauseSelectedTopicsPipeline}
+                        disabled={busyAction === "auto-pipeline-pause"}
+                        className="border-amber-500/60 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-600 font-medium"
+                      >
+                        {busyAction === "auto-pipeline-pause" ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <PauseCircle className="mr-2 h-4 w-4 text-amber-600 dark:text-amber-400" />
+                        )}
+                        Pause pipeline
+                      </Button>
+                    )
+                  )}
+
                   <Button
                     variant="destructive"
                     onClick={stopSelectedTopicsPipeline}

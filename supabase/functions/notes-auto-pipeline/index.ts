@@ -256,10 +256,19 @@ const finishItem = async (
     .eq("run_id", item.run_id)
     .eq("status", "submitted");
 
+  const { data: run } = await admin
+    .from("notes_auto_pipeline_runs")
+    .select("status")
+    .eq("id", item.run_id)
+    .single();
+
+  const isPaused = run?.status === "paused";
+  const newStatus = remaining === 0 ? "completed" : isPaused ? "paused" : "running";
+
   await admin
     .from("notes_auto_pipeline_runs")
     .update({
-      status: remaining === 0 ? "completed" : "running",
+      status: newStatus,
       completed_items: completed || 0,
       current_topic_id: null,
       completed_at: remaining === 0 ? now : null,
@@ -267,7 +276,7 @@ const finishItem = async (
     })
     .eq("id", item.run_id);
 
-  if ((remaining || 0) > 0) scheduleNextTick(supabaseUrl, anonKey, 0);
+  if ((remaining || 0) > 0 && !isPaused) scheduleNextTick(supabaseUrl, anonKey, 0);
 };
 
 const backfillMissingResult = async (
@@ -328,7 +337,7 @@ const processNext = async (
       .select("id, api_base, status, stop_requested")
       .eq("id", item.run_id)
       .single();
-    if (runError || !run || run.status !== "running" || run.stop_requested) {
+    if (runError || !run || (run.status !== "running" && run.status !== "paused") || run.stop_requested) {
       throw new Error("Pipeline was stopped before this topic could be submitted.");
     }
 
@@ -631,6 +640,44 @@ Deno.serve(async (req) => {
       .eq("role", "admin")
       .maybeSingle();
     if (!role) return jsonResponse(403, { error: "Admin access required" });
+
+    if (action === "pause") {
+      const runId = String(body?.run_id || "");
+      if (!runId) return jsonResponse(400, { error: "run_id is required" });
+      const now = new Date().toISOString();
+      await admin
+        .from("notes_auto_pipeline_runs")
+        .update({ status: "paused", updated_at: now })
+        .eq("id", runId)
+        .eq("subject_id", body?.subject_id);
+      return jsonResponse(200, {
+        success: true,
+        run_id: runId,
+        status: "paused",
+        message: "Pipeline paused. Current in-progress job will finish, but next jobs will not be submitted until resumed.",
+      });
+    }
+
+    if (action === "resume") {
+      const runId = String(body?.run_id || "");
+      if (!runId) return jsonResponse(400, { error: "run_id is required" });
+      const now = new Date().toISOString();
+      await admin
+        .from("notes_auto_pipeline_runs")
+        .update({ status: "running", updated_at: now })
+        .eq("id", runId)
+        .eq("subject_id", body?.subject_id);
+
+      EdgeRuntime.waitUntil(
+        processNext(admin, supabaseUrl, anonKey, serviceRoleKey, pipelineSecret),
+      );
+      return jsonResponse(200, {
+        success: true,
+        run_id: runId,
+        status: "running",
+        message: "Pipeline resumed. Processing queued jobs.",
+      });
+    }
 
     if (action === "stop") {
       const runId = String(body?.run_id || "");
