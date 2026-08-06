@@ -2,8 +2,9 @@
 
 ## Supabase Edge Functions
 
-- Any change to a file under `supabase/functions/<function-name>/` must be deployed to the linked Supabase project before the task is considered complete.
-- Deploy each changed function explicitly with `supabase functions deploy <function-name> --project-ref oxwhqvsoelqqsblmqkxx`.
+- Any change to a file under `supabase/functions/<function-name>/` MUST be automatically deployed live to Supabase Cloud project `oxwhqvsoelqqsblmqkxx` before finishing the task.
+- Deployment command:
+  `npx supabase functions deploy <function-name> --project-ref oxwhqvsoelqqsblmqkxx --no-verify-jwt`
+- Use the `SUPABASE_ACCESS_TOKEN` environment variable.
 - Preserve the function's `verify_jwt` setting from `supabase/config.toml`.
-- After deployment, verify that the live function version and `updated_at` changed successfully.
-- If deployment cannot be completed, clearly report that the repository code and the live function are out of sync.
+- Confirm deployment success in the final turn summary.
