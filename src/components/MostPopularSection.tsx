@@ -14,7 +14,8 @@ export const MostPopularSection = ({ featuredCoursesData }: MostPopularSectionPr
   const [currentIndex, setCurrentIndex] = useState(0);
   const navigate = useNavigate();
 
-  const courses = featuredCoursesData?.map(fc => ({
+  const courses = Array.isArray(featuredCoursesData)
+    ? featuredCoursesData.map(fc => ({
     id: fc.courses?.id || fc.course_id,
     title: fc.courses?.name || "Course",
     rating: fc.courses?.rating || 4.9,
@@ -29,7 +30,8 @@ export const MostPopularSection = ({ featuredCoursesData }: MostPopularSectionPr
       const ct = (fc.courses as any)?.course_thumbnails;
       return Array.isArray(ct) ? ct[0]?.storage_url : ct?.storage_url || null;
     })(),
-  })) || [];
+  }))
+    : [];
 
   if (courses.length === 0) return null;
 

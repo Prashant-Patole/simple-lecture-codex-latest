@@ -64,13 +64,40 @@ export interface HomepageData {
 
 const TIMEOUT_MS = 10000; // 10 second timeout
 
+const asArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
+
+const normalizeHomepageData = (data: any): HomepageData => {
+  if (!data || typeof data !== "object" || data.error) {
+    throw new Error(
+      typeof data?.error === "string"
+        ? data.error
+        : "Homepage data is unavailable. Please try again.",
+    );
+  }
+
+  return {
+    categories: asArray(data.categories),
+    courses: asArray(data.courses),
+    bestsellers: asArray(data.bestsellers),
+    topCourses: asArray(data.topCourses),
+    mostPopular: asArray(data.mostPopular),
+    exploreGoals: asArray(data.exploreGoals),
+    heroVideoSettings: {
+      enabled: Boolean(data.heroVideoSettings?.enabled),
+      youtube_url: String(data.heroVideoSettings?.youtube_url || ""),
+    },
+  };
+};
+
 const fetchWithTimeout = async (): Promise<HomepageData> => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
+    // Prefer POST — some edge gateways return 404 for function GET invokes.
     const { data, error } = await supabase.functions.invoke("homepage-data", {
-      method: "GET",
+      method: "POST",
+      body: {},
     });
 
     clearTimeout(timeoutId);
@@ -80,16 +107,17 @@ const fetchWithTimeout = async (): Promise<HomepageData> => {
       throw error;
     }
 
+    const normalized = normalizeHomepageData(data);
     console.log("Homepage data received:", {
-      categories: data?.categories?.length || 0,
-      courses: data?.courses?.length || 0,
-      bestsellers: data?.bestsellers?.length || 0,
-      topCourses: data?.topCourses?.length || 0,
-      mostPopular: data?.mostPopular?.length || 0,
-      exploreGoals: data?.exploreGoals?.length || 0,
+      categories: normalized.categories.length,
+      courses: normalized.courses.length,
+      bestsellers: normalized.bestsellers.length,
+      topCourses: normalized.topCourses.length,
+      mostPopular: normalized.mostPopular.length,
+      exploreGoals: normalized.exploreGoals.length,
     });
 
-    return data as HomepageData;
+    return normalized;
   } catch (err) {
     clearTimeout(timeoutId);
     if (err instanceof Error && err.name === "AbortError") {

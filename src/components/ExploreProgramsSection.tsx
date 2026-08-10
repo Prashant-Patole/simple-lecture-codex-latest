@@ -32,7 +32,7 @@ export const ExploreProgramsSection = ({ categoriesData, coursesData }: ExploreP
   const coursesPerPage = 9;
   
   // Only fetch categories if no props provided (skip redundant query when data comes from parent)
-  const shouldFetchCategories = !categoriesData;
+  const shouldFetchCategories = !Array.isArray(categoriesData);
   const { 
     data: fetchedCategories, 
     isLoading: categoriesLoading,
@@ -57,9 +57,12 @@ export const ExploreProgramsSection = ({ categoriesData, coursesData }: ExploreP
 
   // Use props if provided, otherwise use fetched data
   // Sort: "Board Exams" first, others after
-  const rawCategories = categoriesData || fetchedCategories;
+  const rawCategories = Array.isArray(categoriesData)
+    ? categoriesData
+    : Array.isArray(fetchedCategories)
+      ? fetchedCategories
+      : [];
   const categoriesHierarchy = useMemo(() => {
-    if (!rawCategories) return rawCategories;
     return [...rawCategories].sort((a, b) => {
       const aIsBoard = a.name.toLowerCase().includes('board exam');
       const bIsBoard = b.name.toLowerCase().includes('board exam');
@@ -69,7 +72,9 @@ export const ExploreProgramsSection = ({ categoriesData, coursesData }: ExploreP
     });
   }, [rawCategories]);
   // Only use coursesData prop when no filter is selected (showing all)
-  const courses = (!hasFilter && coursesData) ? coursesData : fetchedCourses;
+  const courses = (!hasFilter && Array.isArray(coursesData))
+    ? coursesData
+    : (Array.isArray(fetchedCourses) ? fetchedCourses : []);
 
   // Get subcategories (level 2) for selected parent
   const subCategories = useMemo(() => {

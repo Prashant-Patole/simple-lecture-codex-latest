@@ -16,15 +16,19 @@ export const BestsellersSection = ({ featuredCoursesData }: BestsellersSectionPr
   const navigate = useNavigate();
   
   // Only fetch if no props provided (skip redundant query when data comes from parent)
-  const shouldFetch = !featuredCoursesData;
+  const shouldFetch = !Array.isArray(featuredCoursesData);
   const { data: fetchedCourses, isLoading, isError, refetch } = useFeaturedCourses('bestsellers', shouldFetch);
   
   // Use props if available
-  const featuredCourses = featuredCoursesData || fetchedCourses;
+  const featuredCourses = Array.isArray(featuredCoursesData)
+    ? featuredCoursesData
+    : Array.isArray(fetchedCourses)
+      ? fetchedCourses
+      : [];
 
   // Memoize course mapping to prevent recreation on every render
   const bestsellerCourses = useMemo(() => 
-    featuredCourses?.map(fc => ({
+    featuredCourses.map(fc => ({
       id: fc.courses?.id || fc.course_id,
       title: fc.courses?.name || "Course",
       instructor: fc.courses?.instructor_name || "SimpleLecture Team",

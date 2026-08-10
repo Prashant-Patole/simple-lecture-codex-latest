@@ -16,14 +16,18 @@ export const TopCourses = ({ featuredCoursesData }: TopCoursesProps) => {
   const navigate = useNavigate();
   
   // Only fetch if no props provided (skip redundant query when data comes from parent)
-  const shouldFetch = !featuredCoursesData;
+  const shouldFetch = !Array.isArray(featuredCoursesData);
   const { data: fetchedCourses, isLoading, isError, refetch } = useFeaturedCourses('top_courses', shouldFetch);
   
   // Use props if available
-  const featuredCourses = featuredCoursesData || fetchedCourses;
+  const featuredCourses = Array.isArray(featuredCoursesData)
+    ? featuredCoursesData
+    : Array.isArray(fetchedCourses)
+      ? fetchedCourses
+      : [];
 
   // Map database courses to display format
-  const courses = featuredCourses?.map(fc => ({
+  const courses = featuredCourses.map(fc => ({
     id: fc.courses?.id || fc.course_id,
     title: fc.courses?.name || "Course",
     level: "Popular",
@@ -39,7 +43,7 @@ export const TopCourses = ({ featuredCoursesData }: TopCoursesProps) => {
       const ct = (fc.courses as any)?.course_thumbnails;
       return Array.isArray(ct) ? ct[0]?.storage_url : ct?.storage_url || null;
     })(),
-  })) || [];
+  }));
 
   // Don't render if no courses after loading completes
   if (!isLoading && courses.length === 0) {
