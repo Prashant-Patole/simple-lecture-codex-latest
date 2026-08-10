@@ -262,7 +262,13 @@ export function SubjectNotesTab({
         .eq("chapter_id", chapterId)
         .order("topic_number", { ascending: true });
       if (error) throw error;
-      return data || [];
+      const list = data || [];
+      return [...list].sort((a: any, b: any) =>
+        String(a.topic_number || "").localeCompare(String(b.topic_number || ""), undefined, {
+          numeric: true,
+          sensitivity: "base",
+        }),
+      );
     },
   });
 
@@ -285,7 +291,8 @@ export function SubjectNotesTab({
   const pipelineJobsQuery = useQuery({
     queryKey: ["notes-auto-pipeline-jobs", subjectId],
     enabled: !!subjectId,
-    refetchInterval: jobsOpen ? 3000 : false,
+    // Keep polling while on this tab so Pause/Resume controls stay accurate after revisit.
+    refetchInterval: 3000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("notes_auto_pipeline_items" as any)
@@ -303,6 +310,15 @@ export function SubjectNotesTab({
   );
   const isPipelinePaused = activePipelineRun?.status === "paused";
   const latestPipelineRun = pipelineRunsQuery.data?.[0];
+  // Prefer the live run so revisiting the page always shows the active pipeline, not a stale finished one.
+  const displayPipelineRun = activePipelineRun || latestPipelineRun;
+  const activePipelineJobs = useMemo(() => {
+    if (!activePipelineRun?.id || !pipelineJobsQuery.data) return [];
+    return pipelineJobsQuery.data.filter((job: any) => job.run_id === activePipelineRun.id);
+  }, [activePipelineRun?.id, pipelineJobsQuery.data]);
+  const currentPipelineJob =
+    activePipelineJobs.find((job: any) => job.status === "processing") ||
+    activePipelineJobs.find((job: any) => job.status === "queued");
 
   const selectedChapter = chapters.find((chapter: any) => chapter.id === chapterId);
   const selectedTopic = topics.find((topic: any) => topic.id === topicId);
@@ -726,9 +742,57 @@ export function SubjectNotesTab({
     });
 
   const dataLoading = documentLoading || questionsLoading || importantQuery.isLoading;
-  const pipelineProgress = latestPipelineRun?.total_items
-    ? Math.round((latestPipelineRun.completed_items / latestPipelineRun.total_items) * 100)
+  const pipelineProgress = displayPipelineRun?.total_items
+    ? Math.round((Number(displayPipelineRun.completed_items || 0) / Number(displayPipelineRun.total_items)) * 100)
     : 0;
+
+  const pipelineControlButtons = (
+    <div className="flex flex-wrap gap-2">
+      {activePipelineRun ? (
+        isPipelinePaused ? (
+          <Button
+            onClick={resumeSelectedTopicsPipeline}
+            disabled={busyAction === "auto-pipeline-resume"}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+          >
+            {busyAction === "auto-pipeline-resume" ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <PlayCircle className="mr-2 h-4 w-4" />
+            )}
+            Resume pipeline
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            onClick={pauseSelectedTopicsPipeline}
+            disabled={busyAction === "auto-pipeline-pause"}
+            className="border-amber-500/60 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-600 font-medium"
+          >
+            {busyAction === "auto-pipeline-pause" ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <PauseCircle className="mr-2 h-4 w-4 text-amber-600 dark:text-amber-400" />
+            )}
+            Pause pipeline
+          </Button>
+        )
+      ) : null}
+
+      <Button
+        variant="destructive"
+        onClick={stopSelectedTopicsPipeline}
+        disabled={!activePipelineRun || busyAction === "auto-pipeline-stop"}
+      >
+        {busyAction === "auto-pipeline-stop" ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          <Square className="mr-2 h-4 w-4" />
+        )}
+        Stop pipeline
+      </Button>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -756,6 +820,88 @@ export function SubjectNotesTab({
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
+          {displayPipelineRun && (
+            <div
+              className={`space-y-3 rounded-xl border p-4 ${
+                activePipelineRun
+                  ? isPipelinePaused
+                    ? "border-amber-300 bg-amber-50/70"
+                    : "border-emerald-300 bg-emerald-50/70"
+                  : "border-border bg-muted/30"
+              }`}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-semibold text-foreground">
+                      {activePipelineRun
+                        ? isPipelinePaused
+                          ? "Notes pipeline is paused"
+                          : "Notes pipeline is running"
+                        : "Latest Notes pipeline"}
+                    </h3>
+                    <Badge
+                      variant={
+                        displayPipelineRun.status === "failed"
+                          ? "destructive"
+                          : displayPipelineRun.status === "completed"
+                            ? "default"
+                            : displayPipelineRun.status === "paused"
+                              ? "outline"
+                              : "secondary"
+                      }
+                      className={
+                        displayPipelineRun.status === "paused"
+                          ? "border-amber-500 text-amber-700 bg-amber-50"
+                          : displayPipelineRun.status === "running"
+                            ? "bg-emerald-600 text-white hover:bg-emerald-600"
+                            : ""
+                      }
+                    >
+                      {displayPipelineRun.status}
+                    </Badge>
+                    <span className="text-sm text-muted-foreground">
+                      {displayPipelineRun.completed_items}/{displayPipelineRun.total_items} completed
+                    </span>
+                  </div>
+                  {currentPipelineJob && (
+                    <p className="text-sm text-muted-foreground">
+                      {currentPipelineJob.status === "processing" ? "Generating now:" : "Next up:"}{" "}
+                      <span className="font-medium text-foreground">
+                        {currentPipelineJob.topic_number ? `${currentPipelineJob.topic_number} · ` : ""}
+                        {currentPipelineJob.topic_title}
+                      </span>
+                    </p>
+                  )}
+                  {displayPipelineRun.error_message && (
+                    <p className="text-sm text-destructive">{displayPipelineRun.error_message}</p>
+                  )}
+                  {isPipelinePaused && (
+                    <p className="text-xs font-medium text-amber-700">
+                      Click Resume pipeline to continue submitting the remaining queued topics.
+                    </p>
+                  )}
+                </div>
+                {activePipelineRun ? pipelineControlButtons : null}
+              </div>
+              <Progress value={pipelineProgress} className="h-2" />
+              {isPipelinePaused && (
+                <Button
+                  onClick={resumeSelectedTopicsPipeline}
+                  disabled={busyAction === "auto-pipeline-resume"}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium sm:w-auto"
+                >
+                  {busyAction === "auto-pipeline-resume" ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <PlayCircle className="mr-2 h-4 w-4" />
+                  )}
+                  Resume paused pipeline
+                </Button>
+              )}
+            </div>
+          )}
+
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label>Chapter</Label>
@@ -890,7 +1036,7 @@ export function SubjectNotesTab({
                 </div>
               </div>
 
-              <ScrollArea className="max-h-60 rounded-lg border bg-background">
+              <ScrollArea className="max-h-[600px] rounded-lg border bg-background">
                 <div className="grid gap-1 p-2 sm:grid-cols-2">
                   {topics.map((topic: any) => (
                     <label
@@ -911,40 +1057,40 @@ export function SubjectNotesTab({
                 </div>
               </ScrollArea>
 
-              {latestPipelineRun && (
+              {displayPipelineRun && (
                 <div className="space-y-2 rounded-lg border bg-background p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                     <div className="flex items-center gap-2">
                       <Badge
                         variant={
-                          latestPipelineRun.status === "failed"
+                          displayPipelineRun.status === "failed"
                             ? "destructive"
-                            : latestPipelineRun.status === "completed"
+                            : displayPipelineRun.status === "completed"
                               ? "default"
-                              : latestPipelineRun.status === "paused"
+                              : displayPipelineRun.status === "paused"
                                 ? "outline"
                                 : "secondary"
                         }
                         className={
-                          latestPipelineRun.status === "paused"
+                          displayPipelineRun.status === "paused"
                             ? "border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-950/50"
                             : ""
                         }
                       >
-                        {latestPipelineRun.status}
+                        {displayPipelineRun.status}
                       </Badge>
                       <span>
-                        {latestPipelineRun.completed_items}/{latestPipelineRun.total_items} completed
+                        {displayPipelineRun.completed_items}/{displayPipelineRun.total_items} completed
                       </span>
                     </div>
-                    {latestPipelineRun.error_message && (
-                      <span className="text-sm text-destructive">{latestPipelineRun.error_message}</span>
+                    {displayPipelineRun.error_message && (
+                      <span className="text-sm text-destructive">{displayPipelineRun.error_message}</span>
                     )}
                   </div>
                   <Progress value={pipelineProgress} className="h-2" />
-                  {latestPipelineRun.status === "paused" && (
+                  {displayPipelineRun.status === "paused" && (
                     <p className="text-xs text-amber-600 dark:text-amber-400 font-medium pt-1">
-                      ⏸️ Pipeline is paused. The currently generating job will finish, but remaining queued jobs will not be submitted until you click Resume.
+                      Pipeline is paused. The currently generating job will finish, but remaining queued jobs will not be submitted until you click Resume.
                     </p>
                   )}
                 </div>
@@ -955,49 +1101,7 @@ export function SubjectNotesTab({
                   {pipelineTopicIds.length} topics selected across chapters
                 </span>
                 <div className="flex flex-wrap gap-2">
-                  {activePipelineRun && (
-                    isPipelinePaused ? (
-                      <Button
-                        onClick={resumeSelectedTopicsPipeline}
-                        disabled={busyAction === "auto-pipeline-resume"}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
-                      >
-                        {busyAction === "auto-pipeline-resume" ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <PlayCircle className="mr-2 h-4 w-4" />
-                        )}
-                        Resume pipeline
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        onClick={pauseSelectedTopicsPipeline}
-                        disabled={busyAction === "auto-pipeline-pause"}
-                        className="border-amber-500/60 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-600 font-medium"
-                      >
-                        {busyAction === "auto-pipeline-pause" ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <PauseCircle className="mr-2 h-4 w-4 text-amber-600 dark:text-amber-400" />
-                        )}
-                        Pause pipeline
-                      </Button>
-                    )
-                  )}
-
-                  <Button
-                    variant="destructive"
-                    onClick={stopSelectedTopicsPipeline}
-                    disabled={!activePipelineRun || busyAction === "auto-pipeline-stop"}
-                  >
-                    {busyAction === "auto-pipeline-stop" ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Square className="mr-2 h-4 w-4" />
-                    )}
-                    Stop pipeline
-                  </Button>
+                  {pipelineControlButtons}
                   <Button
                     onClick={startSelectedTopicsPipeline}
                     disabled={
@@ -1220,25 +1324,28 @@ export function SubjectNotesTab({
                   Every selected topic, the exact payload sent, HTTP statuses, and final API responses.
                 </DialogDescription>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  await supabase.functions.invoke("notes-auto-pipeline", {
-                    body: { action: "tick" },
-                  });
-                  await Promise.all([
-                    pipelineJobsQuery.refetch(),
-                    pipelineRunsQuery.refetch(),
-                  ]);
-                }}
-                disabled={pipelineJobsQuery.isFetching}
-              >
-                <RefreshCw
-                  className={`mr-2 h-4 w-4 ${pipelineJobsQuery.isFetching ? "animate-spin" : ""}`}
-                />
-                Refresh
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                {activePipelineRun ? pipelineControlButtons : null}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    await supabase.functions.invoke("notes-auto-pipeline", {
+                      body: { action: "tick" },
+                    });
+                    await Promise.all([
+                      pipelineJobsQuery.refetch(),
+                      pipelineRunsQuery.refetch(),
+                    ]);
+                  }}
+                  disabled={pipelineJobsQuery.isFetching}
+                >
+                  <RefreshCw
+                    className={`mr-2 h-4 w-4 ${pipelineJobsQuery.isFetching ? "animate-spin" : ""}`}
+                  />
+                  Refresh
+                </Button>
+              </div>
             </div>
           </DialogHeader>
 

@@ -8,6 +8,9 @@ const corsHeaders = {
 
 const DEFAULT_API_BASE = "http://116.202.230.124:8000";
 const REQUEST_TIMEOUT_MS = 420_000;
+const TRANSIENT_RETRY_ATTEMPTS = 4;
+const TRANSIENT_RETRY_BASE_MS = 2_000;
+const TRANSIENT_WAIT_DELAY_MS = 30_000;
 
 const jsonResponse = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
@@ -24,16 +27,58 @@ const normalizeBody = (text: string) => {
   }
 };
 
-const requestJson = async (url: string, init: RequestInit = {}) => {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const response = await fetch(url, { ...init, signal: controller.signal });
-    const text = await response.text();
-    return { status: response.status, body: normalizeBody(text) };
-  } finally {
-    clearTimeout(timeout);
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isTransientNetworkError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return /(tcp connect error|connection timed out|os error 110|os error 111|connection refused|network is unreachable|no route to host|temporarily unavailable|dns error|name or service not known|broken pipe|connection reset|error sending request for url|upstream timed out|timed out after)/i
+    .test(message);
+};
+
+const isRetryableHttpStatus = (status: number) =>
+  status === 408 || status === 425 || status === 429 || status >= 500;
+
+const requestJson = async (
+  url: string,
+  init: RequestInit = {},
+  options: { retries?: number } = {},
+) => {
+  const method = String(init.method || "GET").toUpperCase();
+  const maxAttempts = options.retries ??
+    (method === "GET" || method === "HEAD" ? TRANSIENT_RETRY_ATTEMPTS : TRANSIENT_RETRY_ATTEMPTS);
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, { ...init, signal: controller.signal });
+      const text = await response.text();
+      if (!response.ok && isRetryableHttpStatus(response.status) && attempt < maxAttempts) {
+        console.warn(
+          `[notes-auto-pipeline] retryable HTTP ${response.status} for ${url} (attempt ${attempt}/${maxAttempts})`,
+        );
+        await sleep(TRANSIENT_RETRY_BASE_MS * attempt);
+        continue;
+      }
+      return { status: response.status, body: normalizeBody(text) };
+    } catch (error) {
+      lastError = error instanceof Error && error.name === "AbortError"
+        ? new Error(`Upstream timed out after ${REQUEST_TIMEOUT_MS / 1000}s for ${url}`)
+        : error;
+      const retryable = isTransientNetworkError(lastError);
+      console.warn(
+        `[notes-auto-pipeline] fetch failed for ${url} (attempt ${attempt}/${maxAttempts})`,
+        lastError,
+      );
+      if (!retryable || attempt >= maxAttempts) throw lastError;
+      await sleep(TRANSIENT_RETRY_BASE_MS * attempt);
+    } finally {
+      clearTimeout(timeout);
+    }
   }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError || "Upstream fetch failed"));
 };
 
 const freshReadUrl = (url: string) =>
@@ -208,7 +253,7 @@ const failRun = async (
 const scheduleNextTick = (supabaseUrl: string, anonKey: string, delayMs = 15_000) => {
   EdgeRuntime.waitUntil(
     (async () => {
-      if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+      if (delayMs > 0) await sleep(delayMs);
       await fetch(`${supabaseUrl}/functions/v1/notes-auto-pipeline`, {
         method: "POST",
         headers: {
@@ -219,6 +264,92 @@ const scheduleNextTick = (supabaseUrl: string, anonKey: string, delayMs = 15_000
       });
     })().catch((error) => console.error("[notes-auto-pipeline] next tick failed", error)),
   );
+};
+
+const continueWaitingAfterTransient = async (
+  admin: ReturnType<typeof createClient>,
+  item: Record<string, unknown>,
+  supabaseUrl: string,
+  anonKey: string,
+  message: string,
+) => {
+  console.warn("[notes-auto-pipeline] transient notes API issue; will retry", item.id, message);
+  await admin
+    .from("notes_auto_pipeline_items")
+    .update({
+      generation_response: {
+        queue_response: getQueueResponse(item.generation_response),
+        latest_status: {
+          waiting_on_notes_api: true,
+          transient_error: message.slice(0, 500),
+          at: new Date().toISOString(),
+        },
+      },
+      error_message: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", item.id)
+    .eq("status", "processing");
+  scheduleNextTick(supabaseUrl, anonKey, TRANSIENT_WAIT_DELAY_MS);
+  return {
+    processed: true,
+    waiting: true,
+    transient: true,
+    item_id: item.id,
+    message,
+  };
+};
+
+const requeueAfterTransient = async (
+  admin: ReturnType<typeof createClient>,
+  item: Record<string, unknown>,
+  supabaseUrl: string,
+  anonKey: string,
+  message: string,
+  patch: Record<string, unknown> = {},
+) => {
+  console.warn(
+    "[notes-auto-pipeline] transient submit failure; re-queueing topic",
+    item.id,
+    message,
+  );
+  const now = new Date().toISOString();
+  await admin
+    .from("notes_auto_pipeline_items")
+    .update({
+      ...patch,
+      status: "queued",
+      error_message: null,
+      started_at: null,
+      completed_at: null,
+      generation_response: {
+        queue_response: getQueueResponse(item.generation_response),
+        latest_status: {
+          waiting_on_notes_api: true,
+          transient_error: message.slice(0, 500),
+          at: now,
+        },
+      },
+      updated_at: now,
+    })
+    .eq("id", item.id);
+  await admin
+    .from("notes_auto_pipeline_runs")
+    .update({
+      current_topic_id: null,
+      updated_at: now,
+    })
+    .eq("id", item.run_id)
+    .eq("status", "running");
+  scheduleNextTick(supabaseUrl, anonKey, TRANSIENT_WAIT_DELAY_MS);
+  return {
+    processed: true,
+    waiting: true,
+    transient: true,
+    requeued: true,
+    item_id: item.id,
+    message,
+  };
 };
 
 const finishItem = async (
@@ -296,27 +427,37 @@ const backfillMissingResult = async (
   const runValue = item.run as unknown;
   const run = (Array.isArray(runValue) ? runValue[0] : runValue) as Record<string, unknown> | null;
   const apiBase = String(run?.api_base || DEFAULT_API_BASE).replace(/\/+$/, "");
-  const statusResult = await requestJson(
-    freshReadUrl(`${apiBase}/notes/status/${encodeURIComponent(String(item.external_document_id))}`),
-    { headers: { "Cache-Control": "no-cache" } },
-  );
-  if (statusResult.status !== 200) return { processed: false, backfill_status: statusResult.status };
-  const state = readGenerationState(statusResult.body as Record<string, unknown>);
-  if (!state.completed) return { processed: false, backfill_waiting: true };
+  try {
+    const statusResult = await requestJson(
+      freshReadUrl(`${apiBase}/notes/status/${encodeURIComponent(String(item.external_document_id))}`),
+      { headers: { "Cache-Control": "no-cache" } },
+    );
+    if (statusResult.status !== 200) {
+      return { processed: false, backfill_status: statusResult.status };
+    }
+    const state = readGenerationState(statusResult.body as Record<string, unknown>);
+    if (!state.completed) return { processed: false, backfill_waiting: true };
 
-  const finalResponse = await fetchGeneratedResult(apiBase, String(item.external_document_id));
-  await admin
-    .from("notes_auto_pipeline_items")
-    .update({
-      generation_response: {
-        final_status: statusResult.body,
-      },
-      final_response_http_status: 200,
-      final_response: finalResponse,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", item.id);
-  return { processed: true, backfilled: true, item_id: item.id };
+    const finalResponse = await fetchGeneratedResult(apiBase, String(item.external_document_id));
+    await admin
+      .from("notes_auto_pipeline_items")
+      .update({
+        generation_response: {
+          final_status: statusResult.body,
+        },
+        final_response_http_status: 200,
+        final_response: finalResponse,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", item.id);
+    return { processed: true, backfilled: true, item_id: item.id };
+  } catch (error) {
+    if (isTransientNetworkError(error)) {
+      console.warn("[notes-auto-pipeline] backfill deferred due to transient notes API issue", error);
+      return { processed: false, transient: true };
+    }
+    throw error;
+  }
 };
 
 const processNext = async (
@@ -343,11 +484,36 @@ const processNext = async (
 
     const apiBase = String(run.api_base || DEFAULT_API_BASE).replace(/\/+$/, "");
     if (item.external_document_id && item.generation_http_status === 200) {
-      const statusResult = await requestJson(
-        freshReadUrl(`${apiBase}/notes/status/${encodeURIComponent(String(item.external_document_id))}`),
-        { headers: { "Cache-Control": "no-cache" } },
-      );
+      let statusResult: { status: number; body: unknown };
+      try {
+        statusResult = await requestJson(
+          freshReadUrl(`${apiBase}/notes/status/${encodeURIComponent(String(item.external_document_id))}`),
+          { headers: { "Cache-Control": "no-cache" } },
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (isTransientNetworkError(error)) {
+          return await continueWaitingAfterTransient(
+            admin,
+            item,
+            supabaseUrl,
+            anonKey,
+            message,
+          );
+        }
+        throw error;
+      }
+
       if (statusResult.status !== 200) {
+        if (isRetryableHttpStatus(statusResult.status)) {
+          return await continueWaitingAfterTransient(
+            admin,
+            item,
+            supabaseUrl,
+            anonKey,
+            `Notes status temporarily unavailable (HTTP ${statusResult.status}).`,
+          );
+        }
         await failRun(admin, item, `Notes status returned HTTP ${statusResult.status}.`, {
           generation_response: {
             queue_response: getQueueResponse(item.generation_response),
@@ -392,13 +558,22 @@ const processNext = async (
             throw new Error("Notes status completed but no generated topic response was available.");
           }
         } catch (error) {
-          if (!completed) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (isTransientNetworkError(error) || !completed) {
             console.warn(
               "[notes-auto-pipeline] generated result is not available yet; continuing to wait",
               error,
             );
+            if (isTransientNetworkError(error)) {
+              return await continueWaitingAfterTransient(
+                admin,
+                item,
+                supabaseUrl,
+                anonKey,
+                message,
+              );
+            }
           } else {
-            const message = error instanceof Error ? error.message : String(error);
             await failRun(admin, item, message, {
               generation_response: {
                 queue_response: getQueueResponse(item.generation_response),
@@ -417,6 +592,7 @@ const processNext = async (
             queue_response: getQueueResponse(item.generation_response),
             latest_status: statusBody,
           },
+          error_message: null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", item.id);
@@ -428,6 +604,63 @@ const processNext = async (
         remote_status: documentStatus,
         generation_state: generationState,
       };
+    }
+
+    // Import already created a remote document, but generate did not finish cleanly.
+    // Retry generate (or fall through to status polling once HTTP 200 is recorded).
+    if (item.external_document_id && item.generation_http_status !== 200) {
+      const documentId = String(item.external_document_id);
+      let generated: { status: number; body: unknown };
+      try {
+        generated = await requestJson(
+          `${apiBase}/notes/generate/${encodeURIComponent(documentId)}`,
+          { method: "POST" },
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (isTransientNetworkError(error)) {
+          return await continueWaitingAfterTransient(
+            admin,
+            item,
+            supabaseUrl,
+            anonKey,
+            message,
+          );
+        }
+        throw error;
+      }
+
+      if (generated.status !== 200) {
+        if (isRetryableHttpStatus(generated.status)) {
+          return await continueWaitingAfterTransient(
+            admin,
+            item,
+            supabaseUrl,
+            anonKey,
+            `Notes generate temporarily unavailable (HTTP ${generated.status}).`,
+          );
+        }
+        await failRun(admin, item, `Notes generation returned HTTP ${generated.status}.`, {
+          external_document_id: documentId,
+          generation_http_status: generated.status,
+          generation_response: { queue_response: generated.body },
+        });
+        return { processed: true, failed: true };
+      }
+
+      const now = new Date().toISOString();
+      await admin
+        .from("notes_auto_pipeline_items")
+        .update({
+          generation_http_status: generated.status,
+          generation_response: { queue_response: generated.body },
+          error_message: null,
+          completed_at: null,
+          updated_at: now,
+        })
+        .eq("id", item.id);
+      scheduleNextTick(supabaseUrl, anonKey);
+      return { processed: true, failed: false, waiting: true, item_id: item.id };
     }
 
     const [
@@ -540,12 +773,42 @@ const processNext = async (
       };
     }
 
-    const imported = await requestJson(`${apiBase}/documents/import-json`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    let imported: { status: number; body: unknown };
+    try {
+      imported = await requestJson(`${apiBase}/documents/import-json`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (isTransientNetworkError(error)) {
+        return await requeueAfterTransient(
+          admin,
+          item,
+          supabaseUrl,
+          anonKey,
+          `Document import temporarily unreachable: ${message}`,
+          { payload },
+        );
+      }
+      throw error;
+    }
     if (imported.status !== 200) {
+      if (isRetryableHttpStatus(imported.status)) {
+        return await requeueAfterTransient(
+          admin,
+          item,
+          supabaseUrl,
+          anonKey,
+          `Document import temporarily unavailable (HTTP ${imported.status}).`,
+          {
+            payload,
+            import_http_status: imported.status,
+            import_response: imported.body,
+          },
+        );
+      }
       await failRun(admin, item, `Document import returned HTTP ${imported.status}.`, {
         payload,
         import_http_status: imported.status,
@@ -564,11 +827,83 @@ const processNext = async (
       return { processed: true, failed: true };
     }
 
-    const generated = await requestJson(
-      `${apiBase}/notes/generate/${encodeURIComponent(documentId)}`,
-      { method: "POST" },
-    );
+    let generated: { status: number; body: unknown };
+    try {
+      generated = await requestJson(
+        `${apiBase}/notes/generate/${encodeURIComponent(documentId)}`,
+        { method: "POST" },
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (isTransientNetworkError(error)) {
+        // Import already succeeded — keep the document id and retry generate/status later.
+        const now = new Date().toISOString();
+        await admin
+          .from("notes_auto_pipeline_items")
+          .update({
+            status: "processing",
+            payload,
+            import_http_status: imported.status,
+            import_response: imported.body,
+            external_document_id: documentId,
+            generation_http_status: null,
+            generation_response: {
+              queue_response: null,
+              latest_status: {
+                waiting_on_notes_api: true,
+                transient_error: message.slice(0, 500),
+                at: now,
+              },
+            },
+            error_message: null,
+            completed_at: null,
+            updated_at: now,
+          })
+          .eq("id", item.id);
+        scheduleNextTick(supabaseUrl, anonKey, TRANSIENT_WAIT_DELAY_MS);
+        return {
+          processed: true,
+          waiting: true,
+          transient: true,
+          item_id: item.id,
+          message,
+        };
+      }
+      throw error;
+    }
     if (generated.status !== 200) {
+      if (isRetryableHttpStatus(generated.status)) {
+        const now = new Date().toISOString();
+        await admin
+          .from("notes_auto_pipeline_items")
+          .update({
+            status: "processing",
+            payload,
+            import_http_status: imported.status,
+            import_response: imported.body,
+            external_document_id: documentId,
+            generation_http_status: generated.status,
+            generation_response: {
+              queue_response: generated.body,
+              latest_status: {
+                waiting_on_notes_api: true,
+                transient_error: `Notes generate temporarily unavailable (HTTP ${generated.status}).`,
+                at: now,
+              },
+            },
+            error_message: null,
+            completed_at: null,
+            updated_at: now,
+          })
+          .eq("id", item.id);
+        scheduleNextTick(supabaseUrl, anonKey, TRANSIENT_WAIT_DELAY_MS);
+        return {
+          processed: true,
+          waiting: true,
+          transient: true,
+          item_id: item.id,
+        };
+      }
       await failRun(admin, item, `Notes generation returned HTTP ${generated.status}.`, {
         payload,
         import_http_status: imported.status,
@@ -591,6 +926,7 @@ const processNext = async (
         external_document_id: documentId,
         generation_http_status: generated.status,
         generation_response: { queue_response: generated.body },
+        error_message: null,
         completed_at: null,
         updated_at: now,
       })
@@ -599,6 +935,24 @@ const processNext = async (
     return { processed: true, failed: false, waiting: true, item_id: item.id };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    if (isTransientNetworkError(error) && item.external_document_id) {
+      return await continueWaitingAfterTransient(
+        admin,
+        item,
+        supabaseUrl,
+        anonKey,
+        message,
+      );
+    }
+    if (isTransientNetworkError(error)) {
+      return await requeueAfterTransient(
+        admin,
+        item,
+        supabaseUrl,
+        anonKey,
+        message,
+      );
+    }
     console.error("[notes-auto-pipeline] topic failed", item.id, error);
     await failRun(admin, item, message);
     return { processed: true, failed: true };
