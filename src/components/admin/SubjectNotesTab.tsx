@@ -681,15 +681,25 @@ export function SubjectNotesTab({
   const pauseSelectedTopicsPipeline = () =>
     runAction("auto-pipeline-pause", async () => {
       if (!activePipelineRun?.id) throw new Error("No Notes pipeline is currently active");
+      const runId = activePipelineRun.id;
       const { data, error } = await supabase.functions.invoke("notes-auto-pipeline", {
         body: {
           action: "pause",
-          run_id: activePipelineRun.id,
+          run_id: runId,
           subject_id: subjectId,
         },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+      // Optimistic UI update so Resume appears immediately after a successful pause.
+      queryClient.setQueryData(["notes-auto-pipeline-runs", subjectId], (current: any) => {
+        if (!Array.isArray(current)) return current;
+        return current.map((run: any) =>
+          run.id === runId
+            ? { ...run, status: "paused", updated_at: new Date().toISOString() }
+            : run,
+        );
+      });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["notes-auto-pipeline-runs", subjectId] }),
         queryClient.invalidateQueries({ queryKey: ["notes-auto-pipeline-jobs", subjectId] }),
@@ -703,15 +713,24 @@ export function SubjectNotesTab({
   const resumeSelectedTopicsPipeline = () =>
     runAction("auto-pipeline-resume", async () => {
       if (!activePipelineRun?.id) throw new Error("No Notes pipeline is currently active");
+      const runId = activePipelineRun.id;
       const { data, error } = await supabase.functions.invoke("notes-auto-pipeline", {
         body: {
           action: "resume",
-          run_id: activePipelineRun.id,
+          run_id: runId,
           subject_id: subjectId,
         },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+      queryClient.setQueryData(["notes-auto-pipeline-runs", subjectId], (current: any) => {
+        if (!Array.isArray(current)) return current;
+        return current.map((run: any) =>
+          run.id === runId
+            ? { ...run, status: "running", updated_at: new Date().toISOString() }
+            : run,
+        );
+      });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["notes-auto-pipeline-runs", subjectId] }),
         queryClient.invalidateQueries({ queryKey: ["notes-auto-pipeline-jobs", subjectId] }),

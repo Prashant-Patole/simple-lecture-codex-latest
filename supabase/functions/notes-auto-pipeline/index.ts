@@ -997,13 +997,24 @@ Deno.serve(async (req) => {
 
     if (action === "pause") {
       const runId = String(body?.run_id || "");
+      const subjectId = String(body?.subject_id || "");
       if (!runId) return jsonResponse(400, { error: "run_id is required" });
+      if (!subjectId) return jsonResponse(400, { error: "subject_id is required" });
       const now = new Date().toISOString();
-      await admin
+      const { data: pausedRun, error: pauseError } = await admin
         .from("notes_auto_pipeline_runs")
         .update({ status: "paused", updated_at: now })
         .eq("id", runId)
-        .eq("subject_id", body?.subject_id);
+        .eq("subject_id", subjectId)
+        .in("status", ["running", "paused"])
+        .select("id, status")
+        .maybeSingle();
+      if (pauseError) throw pauseError;
+      if (!pausedRun) {
+        return jsonResponse(409, {
+          error: "Could not pause pipeline. It may already be completed, failed, or stopped.",
+        });
+      }
       return jsonResponse(200, {
         success: true,
         run_id: runId,
@@ -1014,13 +1025,24 @@ Deno.serve(async (req) => {
 
     if (action === "resume") {
       const runId = String(body?.run_id || "");
+      const subjectId = String(body?.subject_id || "");
       if (!runId) return jsonResponse(400, { error: "run_id is required" });
+      if (!subjectId) return jsonResponse(400, { error: "subject_id is required" });
       const now = new Date().toISOString();
-      await admin
+      const { data: resumedRun, error: resumeError } = await admin
         .from("notes_auto_pipeline_runs")
         .update({ status: "running", updated_at: now })
         .eq("id", runId)
-        .eq("subject_id", body?.subject_id);
+        .eq("subject_id", subjectId)
+        .eq("status", "paused")
+        .select("id, status")
+        .maybeSingle();
+      if (resumeError) throw resumeError;
+      if (!resumedRun) {
+        return jsonResponse(409, {
+          error: "Could not resume pipeline. It must be paused first.",
+        });
+      }
 
       EdgeRuntime.waitUntil(
         processNext(admin, supabaseUrl, anonKey, serviceRoleKey, pipelineSecret),
