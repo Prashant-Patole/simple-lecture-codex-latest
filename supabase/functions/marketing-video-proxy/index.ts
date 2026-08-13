@@ -13,9 +13,15 @@ const DEFAULT_IP = "204.12.237.78";
 const DEFAULT_PORT = 5006;
 
 function normalizeTargetLanguages(value: unknown): string | null {
-  if (!value) return null;
-  if (Array.isArray(value)) return value.map(String).filter(Boolean).join(",");
-  return String(value);
+  // Explicit JSON null / empty means "none of these" — do not send a language list.
+  if (value === null || value === undefined) return null;
+  if (Array.isArray(value)) {
+    const joined = value.map(String).filter(Boolean).join(",");
+    return joined || null;
+  }
+  const asString = String(value).trim();
+  if (!asString || asString.toLowerCase() === "null") return null;
+  return asString;
 }
 
 const getMimeType = (name: string): string => {
@@ -165,6 +171,7 @@ Deno.serve(async (req) => {
       no_quiz, avatar_speaker, avatar_language, avatar_id, ocr_provider, skip_threejs,
       skip_wan, skip_avatar, dry_run, generation_scope, llm_routing,
       audio_only, model, target_languages, reel_with_avatar, reel_variant, story_hint,
+      tts_engine,
     } = body;
 
     const ip = server_ip || DEFAULT_IP;
@@ -205,12 +212,26 @@ Deno.serve(async (req) => {
       if (model) fd.append("model", String(model));
       if (title) fd.append("title", String(title));
       const normalizedTargetLanguages = normalizeTargetLanguages(target_languages);
-      if (normalizedTargetLanguages) fd.append("target_languages", normalizedTargetLanguages);
+      if (normalizedTargetLanguages) {
+        fd.append("target_languages", normalizedTargetLanguages);
+      } else {
+        // "None of these" — omit field so submit_job receives null/None
+        console.log("[marketing:submit] target_languages=null (none of these)");
+      }
       if (reel_with_avatar !== undefined) fd.append("reel_with_avatar", String(reel_with_avatar));
       if (reel_variant) fd.append("reel_variant", String(reel_variant));
       if (story_hint) fd.append("story_hint", String(story_hint));
-      if (avatar_speaker) fd.append("avatar_speaker", String(avatar_speaker));
       if (avatar_language) fd.append("avatar_language", String(avatar_language));
+      const effectiveTtsEngine = tts_engine && String(tts_engine).toLowerCase() !== "default"
+        ? String(tts_engine).toLowerCase()
+        : "";
+      if (effectiveTtsEngine) fd.append("tts_engine", effectiveTtsEngine);
+      // IndicF5 clones avatar reference audio — omit speaker (matches HeyGem routing).
+      if (effectiveTtsEngine === "indicf5") {
+        console.log("[marketing:submit] avatar_speaker suppressed for indicf5");
+      } else if (avatar_speaker) {
+        fd.append("avatar_speaker", String(avatar_speaker));
+      }
       let resolvedAvatarId = avatar_id ? String(avatar_id) : "";
       if (!resolvedAvatarId && subject) {
         try {

@@ -194,6 +194,7 @@ async function processRun(supabase: any, run: any) {
       if (cfg.image_provider) payload.image_provider = cfg.image_provider;
       if (cfg.image_model) payload.image_model = cfg.image_model;
       if (cfg.avatar_speaker) payload.avatar_speaker = cfg.avatar_speaker;
+      if (cfg.tts_engine && cfg.tts_engine !== "default") payload.tts_engine = cfg.tts_engine;
 
       let effectiveAvatarId = cfg.avatar_id as string | undefined;
       if (!effectiveAvatarId && run.subject_id) {
@@ -211,7 +212,11 @@ async function processRun(supabase: any, run: any) {
       console.log(`[auto-submission-tick] Structured Audit: subject="${run.subject_name}", cfg_avatar_id="${cfg.avatar_id}", effective_avatar_id="${payload.avatar_id}"`);
       if (cfg.model) payload.model = cfg.model;
       if (cfg.title) payload.title = cfg.title;
-      if (cfg.target_languages) payload.target_languages = cfg.target_languages;
+      // Explicit null when admin selected "None of these" for targeted languages.
+      if (Object.prototype.hasOwnProperty.call(cfg, "target_languages")) {
+        const langs = cfg.target_languages;
+        payload.target_languages = Array.isArray(langs) && langs.length > 0 ? langs : null;
+      }
       if (cfg.reel_with_avatar !== undefined) payload.reel_with_avatar = cfg.reel_with_avatar;
       if (cfg.reel_variant) payload.reel_variant = cfg.reel_variant;
       if (cfg.story_hint) payload.story_hint = cfg.story_hint;

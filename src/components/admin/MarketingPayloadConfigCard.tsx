@@ -21,8 +21,11 @@ import { Sparkles, Save, Bot, Zap, Cloud, Cpu, Volume2, Globe, UserCheck, Shield
 
 export interface MarketingPayloadConfig {
   avatar_id: string;
-  target_languages: string[];
+  /** null = "None of these" — no multi-language dubbing list in payload */
+  target_languages: string[] | null;
   avatar_speaker: string;
+  avatar_language: string;
+  tts_engine: "default" | "sarvam" | "indicf5";
   llm_routing: Record<string, string>;
 }
 
@@ -44,6 +47,29 @@ export const TARGET_LANGUAGES_LIST = [
   { code: "tamil", name: "Tamil", flagText: "IN" },
   { code: "telugu", name: "Telugu", flagText: "IN" },
   { code: "assamese", name: "Assamese (অসমীয়া)", flagText: "IN" },
+];
+
+export const AVATAR_LANGUAGE_OPTIONS = [
+  { code: "english", name: "English" },
+  ...TARGET_LANGUAGES_LIST.map(({ code, name }) => ({ code, name })),
+];
+
+export const TTS_ENGINE_OPTIONS = [
+  {
+    id: "default" as const,
+    name: "Default (VoxCPM / English)",
+    hint: "No tts_engine sent — backend default for English",
+  },
+  {
+    id: "sarvam" as const,
+    name: "Sarvam TTS",
+    hint: "Requires a speaker voice (e.g. abhilash)",
+  },
+  {
+    id: "indicf5" as const,
+    name: "IndicF5 (voice clone)",
+    hint: "Uses avatar reference audio; speaker is suppressed downstream",
+  },
 ];
 
 export const VOICE_OPTIONS = [
@@ -73,6 +99,8 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
   const [avatarId, setAvatarId] = useState<string>("");
   const [targetLanguages, setTargetLanguages] = useState<string[]>(["kannada", "hindi"]);
   const [voice, setVoice] = useState<string>("abhilash");
+  const [avatarLanguage, setAvatarLanguage] = useState<string>("english");
+  const [ttsEngine, setTtsEngine] = useState<"default" | "sarvam" | "indicf5">("default");
   const [llmRouting, setLlmRouting] = useState<Record<string, string>>(DEFAULT_LLM_ROUTING);
 
   // Confirmation dialog state
@@ -116,8 +144,16 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
       if (savedAiSetting.avatar_id) setAvatarId(savedAiSetting.avatar_id);
       else if (subjectData?.avatar_id) setAvatarId(subjectData.avatar_id);
 
-      if (Array.isArray(savedAiSetting.target_languages)) setTargetLanguages(savedAiSetting.target_languages);
+      if (Array.isArray(savedAiSetting.target_languages)) {
+        setTargetLanguages(savedAiSetting.target_languages);
+      } else if (savedAiSetting.target_languages === null) {
+        setTargetLanguages([]);
+      }
       if (savedAiSetting.avatar_speaker) setVoice(savedAiSetting.avatar_speaker);
+      if (savedAiSetting.avatar_language) setAvatarLanguage(savedAiSetting.avatar_language);
+      if (savedAiSetting.tts_engine === "sarvam" || savedAiSetting.tts_engine === "indicf5" || savedAiSetting.tts_engine === "default") {
+        setTtsEngine(savedAiSetting.tts_engine);
+      }
       if (savedAiSetting.llm_routing) setLlmRouting({ ...DEFAULT_LLM_ROUTING, ...savedAiSetting.llm_routing });
     } else if (subjectData?.avatar_id) {
       setAvatarId(subjectData.avatar_id);
@@ -129,12 +165,14 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
     if (onChange) {
       onChange({
         avatar_id: avatarId,
-        target_languages: targetLanguages,
+        target_languages: targetLanguages.length > 0 ? targetLanguages : null,
         avatar_speaker: voice,
+        avatar_language: avatarLanguage,
+        tts_engine: ttsEngine,
         llm_routing: llmRouting,
       });
     }
-  }, [avatarId, targetLanguages, voice, llmRouting, onChange]);
+  }, [avatarId, targetLanguages, voice, avatarLanguage, ttsEngine, llmRouting, onChange]);
 
   // Save Config Mutation with confirmation
   const saveConfigMutation = useMutation({
@@ -175,10 +213,15 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
   });
 
   const handleRequestSave = (newConfig?: Partial<MarketingPayloadConfig>) => {
+    const langs = newConfig?.target_languages !== undefined
+      ? newConfig.target_languages
+      : (targetLanguages.length > 0 ? targetLanguages : null);
     const configToSave: MarketingPayloadConfig = {
       avatar_id: newConfig?.avatar_id ?? avatarId,
-      target_languages: newConfig?.target_languages ?? targetLanguages,
+      target_languages: langs,
       avatar_speaker: newConfig?.avatar_speaker ?? voice,
+      avatar_language: newConfig?.avatar_language ?? avatarLanguage,
+      tts_engine: newConfig?.tts_engine ?? ttsEngine,
       llm_routing: newConfig?.llm_routing ?? llmRouting,
     };
     setPendingSaveConfig(configToSave);
@@ -195,15 +238,15 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
   const toggleLanguage = (code: string) => {
     let next: string[];
     if (targetLanguages.includes(code)) {
-      if (targetLanguages.length === 1) {
-        toast.warning("Please keep at least one targeted language selected.");
-        return;
-      }
       next = targetLanguages.filter((l) => l !== code);
     } else {
       next = [...targetLanguages, code];
     }
     setTargetLanguages(next);
+  };
+
+  const selectNoneOfTheseLanguages = () => {
+    setTargetLanguages([]);
   };
 
   const handleSetAllLlm = (provider: string) => {
@@ -236,7 +279,7 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
               Marketing Video Payload Configuration ({subjectName})
             </CardTitle>
             <CardDescription className="text-xs text-slate-400">
-              Customize Avatar ID, Targeted Languages, Voice, and LLM Routing for marketing jobs. Saved settings apply to all future jobs for this subject.
+              Customize Avatar ID, narration language, TTS engine (Sarvam / IndicF5), target languages, voice, and LLM routing. Saved settings apply to all future marketing jobs for this subject.
             </CardDescription>
           </div>
           <Button
@@ -270,7 +313,7 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
               <Input
                 value={avatarId}
                 onChange={(e) => setAvatarId(e.target.value)}
-                placeholder="e.g. avatar_5ab07dea or avatar_46e03dc2"
+                placeholder="e.g. avatar_5ab07dea or pramod"
                 className="bg-slate-950 text-white border-slate-700 text-sm font-mono focus:border-purple-500"
               />
               <Select
@@ -298,7 +341,7 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
               </Select>
             </div>
             <p className="text-[11px] text-slate-400">
-              Avatar ID saved in database for {subjectName}. Editing requires admin confirmation.
+              Visual avatar character sent as <code className="text-purple-300">avatar_id</code>. Editing requires admin confirmation.
             </p>
           </div>
 
@@ -306,13 +349,14 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
           <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-900/60 p-4">
             <Label className="flex items-center gap-2 text-sm font-semibold text-blue-300">
               <Volume2 className="h-4 w-4 text-blue-400" />
-              3. Voice (TTS Speaker)
+              3. Voice (avatar_speaker)
             </Label>
             <Select
               value={voice}
               onValueChange={(val) => {
                 setVoice(val);
               }}
+              disabled={ttsEngine === "indicf5"}
             >
               <SelectTrigger className="w-full bg-slate-950 text-white border-slate-700 text-sm">
                 <SelectValue placeholder="Select Voice" />
@@ -326,7 +370,61 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
               </SelectContent>
             </Select>
             <p className="text-[11px] text-slate-400">
-              Default voice speaker used for audio generation in marketing videos.
+              {ttsEngine === "indicf5"
+                ? "IndicF5 clones the avatar reference audio — speaker is not used by HeyGem."
+                : ttsEngine === "sarvam"
+                  ? "Required for Sarvam TTS (catalog voice, not avatar clone)."
+                  : "Default voice speaker used for audio generation in marketing videos."}
+            </p>
+          </div>
+        </div>
+
+        {/* Row 1b: Avatar language & TTS engine */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+            <Label className="flex items-center gap-2 text-sm font-semibold text-amber-300">
+              <Globe className="h-4 w-4 text-amber-400" />
+              Avatar Language (avatar_language)
+            </Label>
+            <Select value={avatarLanguage} onValueChange={setAvatarLanguage}>
+              <SelectTrigger className="w-full bg-slate-950 text-white border-slate-700 text-sm">
+                <SelectValue placeholder="Select narration language" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-900 text-white border-slate-700 max-h-72">
+                {AVATAR_LANGUAGE_OPTIONS.map((lang) => (
+                  <SelectItem key={lang.code} value={lang.code}>
+                    {lang.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-slate-400">
+              Primary narration language for the avatar. Non-English jobs auto-select IndicF5 if no TTS engine is set on the server.
+            </p>
+          </div>
+
+          <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+            <Label className="flex items-center gap-2 text-sm font-semibold text-rose-300">
+              <Cpu className="h-4 w-4 text-rose-400" />
+              TTS Engine (tts_engine)
+            </Label>
+            <Select
+              value={ttsEngine}
+              onValueChange={(val: "default" | "sarvam" | "indicf5") => setTtsEngine(val)}
+            >
+              <SelectTrigger className="w-full bg-slate-950 text-white border-slate-700 text-sm">
+                <SelectValue placeholder="Select TTS engine" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-900 text-white border-slate-700">
+                {TTS_ENGINE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.id} value={opt.id}>
+                    {opt.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-slate-400">
+              {TTS_ENGINE_OPTIONS.find((o) => o.id === ttsEngine)?.hint}
             </p>
           </div>
         </div>
@@ -336,14 +434,28 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Label className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
               <Globe className="h-4 w-4 text-emerald-400" />
-              2. Targeted Languages ({targetLanguages.length} Selected)
+              2. Targeted Languages ({targetLanguages.length === 0 ? "None" : `${targetLanguages.length} Selected`})
             </Label>
             <span className="text-[11px] text-slate-400">
-              Select 1 or more target languages. Toggle buttons below.
+              {targetLanguages.length === 0
+                ? <>Payload sends <code className="text-rose-300">target_languages: null</code></>
+                : <>Multi-language dubbing list sent as <code className="text-emerald-300">target_languages</code>.</>}
             </span>
           </div>
 
           <div className="flex flex-wrap gap-2 pt-1">
+            <button
+              type="button"
+              onClick={selectNoneOfTheseLanguages}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                targetLanguages.length === 0
+                  ? "bg-slate-800 text-white border-2 border-rose-400 shadow-md shadow-rose-400/10 font-bold"
+                  : "bg-slate-950 text-slate-400 border border-slate-800 hover:border-slate-700 hover:text-slate-200"
+              }`}
+            >
+              <span className="text-[11px] font-bold text-rose-400">∅</span>
+              <span>None of these</span>
+            </button>
             {TARGET_LANGUAGES_LIST.map((lang) => {
               const isSelected = targetLanguages.includes(lang.code);
               return (
@@ -495,8 +607,17 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
               {pendingSaveConfig && (
                 <div className="rounded border border-slate-800 bg-slate-950 p-2.5 text-xs font-mono space-y-1 text-slate-300">
                   <div>Avatar ID: <span className="text-purple-300 font-bold">{pendingSaveConfig.avatar_id || "(None)"}</span></div>
+                  <div>Avatar Language: <span className="text-amber-300">{pendingSaveConfig.avatar_language}</span></div>
+                  <div>TTS Engine: <span className="text-rose-300">{pendingSaveConfig.tts_engine}</span></div>
                   <div>Voice: <span className="text-blue-300">{pendingSaveConfig.avatar_speaker}</span></div>
-                  <div>Languages: <span className="text-emerald-300">{pendingSaveConfig.target_languages.join(", ")}</span></div>
+                  <div>
+                    Languages:{" "}
+                    <span className="text-emerald-300">
+                      {pendingSaveConfig.target_languages?.length
+                        ? pendingSaveConfig.target_languages.join(", ")
+                        : "null (none of these)"}
+                    </span>
+                  </div>
                 </div>
               )}
               <p className="text-xs text-amber-400">

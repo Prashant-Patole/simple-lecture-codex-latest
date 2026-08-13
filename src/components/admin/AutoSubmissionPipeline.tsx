@@ -158,8 +158,15 @@ export function AutoSubmissionPipeline({ subjectId, subjectName, serverIp, kind 
       const effectivePipelineConfig = kind === "marketing" ? {
         ...(pipelineConfig || {}),
         avatar_id: resolvedAvatarId,
-        target_languages: marketingConfig?.target_languages ?? (pipelineConfig as any)?.target_languages ?? ["kannada", "hindi"],
+        // Explicit null when "None of these" is selected — do not fall back to defaults.
+        target_languages: marketingConfig
+          ? (marketingConfig.target_languages && marketingConfig.target_languages.length > 0
+            ? marketingConfig.target_languages
+            : null)
+          : ((pipelineConfig as any)?.target_languages ?? ["kannada", "hindi"]),
         avatar_speaker: marketingConfig?.avatar_speaker ?? (pipelineConfig as any)?.avatar_speaker ?? "abhilash",
+        avatar_language: marketingConfig?.avatar_language ?? (pipelineConfig as any)?.avatar_language ?? "english",
+        tts_engine: marketingConfig?.tts_engine ?? (pipelineConfig as any)?.tts_engine ?? "default",
         llm_routing: marketingConfig?.llm_routing ?? (pipelineConfig as any)?.llm_routing,
       } : (pipelineConfig ?? null);
 
