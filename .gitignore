@@ -26,3 +26,6 @@ supabase/.temp/
 *.njsproj
 *.sln
 *.sw?
+
+# Local Cursor agent helpers (run-dev.ps1 etc.) — never deploy
+.cursor/

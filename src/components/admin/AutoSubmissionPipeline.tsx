@@ -163,7 +163,7 @@ export function AutoSubmissionPipeline({ subjectId, subjectName, serverIp, kind 
           ? (marketingConfig.target_languages && marketingConfig.target_languages.length > 0
             ? marketingConfig.target_languages
             : null)
-          : ((pipelineConfig as any)?.target_languages ?? ["kannada", "hindi"]),
+          : ((pipelineConfig as any)?.target_languages ?? null),
         avatar_speaker: marketingConfig?.avatar_speaker ?? (pipelineConfig as any)?.avatar_speaker ?? "abhilash",
         avatar_language: marketingConfig?.avatar_language ?? (pipelineConfig as any)?.avatar_language ?? "english",
         tts_engine: marketingConfig?.tts_engine ?? (pipelineConfig as any)?.tts_engine ?? "default",

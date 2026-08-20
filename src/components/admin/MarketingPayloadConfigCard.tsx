@@ -97,7 +97,7 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
 
   // State for payload options
   const [avatarId, setAvatarId] = useState<string>("");
-  const [targetLanguages, setTargetLanguages] = useState<string[]>(["kannada", "hindi"]);
+  const [targetLanguages, setTargetLanguages] = useState<string[]>([]);
   const [voice, setVoice] = useState<string>("abhilash");
   const [avatarLanguage, setAvatarLanguage] = useState<string>("english");
   const [ttsEngine, setTtsEngine] = useState<"default" | "sarvam" | "indicf5">("default");
@@ -154,7 +154,15 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
       if (savedAiSetting.tts_engine === "sarvam" || savedAiSetting.tts_engine === "indicf5" || savedAiSetting.tts_engine === "default") {
         setTtsEngine(savedAiSetting.tts_engine);
       }
-      if (savedAiSetting.llm_routing) setLlmRouting({ ...DEFAULT_LLM_ROUTING, ...savedAiSetting.llm_routing });
+      if (savedAiSetting.llm_routing) {
+        const normalized = Object.fromEntries(
+          Object.entries(savedAiSetting.llm_routing).map(([k, v]) => [
+            k,
+            v === "freellmapi" ? "freellm" : v,
+          ]),
+        );
+        setLlmRouting({ ...DEFAULT_LLM_ROUTING, ...normalized });
+      }
     } else if (subjectData?.avatar_id) {
       setAvatarId(subjectData.avatar_id);
     }
@@ -506,7 +514,7 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => handleSetAllLlm("freellmapi")}
+                onClick={() => handleSetAllLlm("freellm")}
                 className="h-7 text-xs gap-1 border-cyan-500/50 bg-cyan-950/50 text-cyan-200 hover:bg-cyan-900/70"
               >
                 ⚡ All FreeLLM
@@ -562,7 +570,7 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
                     <div className="flex flex-wrap items-center gap-1.5">
                       {[
                         { id: "opusmax", label: "⚡ OpusMax", color: "border-cyan-500/50 bg-cyan-950/60 text-cyan-200" },
-                        { id: "freellmapi", label: "⚡ FreeLLMAPI", color: "border-cyan-500/50 bg-cyan-950/60 text-cyan-200" },
+                        { id: "freellm", label: "⚡ FreeLLM", color: "border-cyan-500/50 bg-cyan-950/60 text-cyan-200" },
                         { id: "openrouter", label: "☁️ OpenRouter", color: "border-emerald-500/50 bg-emerald-950/60 text-emerald-200" },
                         { id: "local", label: "🦙 Local Ollama", color: "border-purple-500/50 bg-purple-950/60 text-purple-200" },
                       ].map((opt) => {
