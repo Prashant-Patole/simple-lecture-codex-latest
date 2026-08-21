@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Languages, LoaderCircle, Play } from 'lucide-react';
+import { ArrowLeft, Languages, LoaderCircle, Minimize, Play } from 'lucide-react';
 import type { V5Language, V5Presentation, V5SubtitleData } from './types';
 import {
   buildSectionTimeline,
@@ -7,6 +7,7 @@ import {
   getPresentationUrl,
   getSubtitlesUrl,
   getTimelinePosition,
+  formatV5Time,
   hasMergedVideo,
 } from './utils';
 import { V5Controls } from './V5Controls';
@@ -26,8 +27,9 @@ export function V5Player({
   onExit,
   onLanguageChange,
 }: V5PlayerProps) {
-  const rootRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const fullscreenControlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingPositionRef = useRef<{ ratio: number; resume: boolean } | null>(null);
   const [presentation, setPresentation] = useState<V5Presentation | null>(null);
   const [subtitleData, setSubtitleData] = useState<V5SubtitleData | null>(null);
@@ -43,6 +45,7 @@ export function V5Player({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [needsTap, setNeedsTap] = useState(false);
   const [keyPointsHidden, setKeyPointsHidden] = useState(false);
+  const [fullscreenControlsVisible, setFullscreenControlsVisible] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -99,10 +102,34 @@ export function V5Player({
   }, [language]);
 
   useEffect(() => {
-    const onFullscreen = () => setIsFullscreen(document.fullscreenElement === rootRef.current);
+    const onFullscreen = () => {
+      setIsFullscreen(document.fullscreenElement === stageRef.current);
+      setFullscreenControlsVisible(false);
+      if (fullscreenControlsTimerRef.current) {
+        clearTimeout(fullscreenControlsTimerRef.current);
+        fullscreenControlsTimerRef.current = null;
+      }
+    };
     document.addEventListener('fullscreenchange', onFullscreen);
-    return () => document.removeEventListener('fullscreenchange', onFullscreen);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreen);
+      if (fullscreenControlsTimerRef.current) {
+        clearTimeout(fullscreenControlsTimerRef.current);
+      }
+    };
   }, []);
+
+  const revealFullscreenControls = useCallback(() => {
+    if (!isFullscreen) return;
+    setFullscreenControlsVisible(true);
+    if (fullscreenControlsTimerRef.current) {
+      clearTimeout(fullscreenControlsTimerRef.current);
+    }
+    fullscreenControlsTimerRef.current = setTimeout(() => {
+      setFullscreenControlsVisible(false);
+      fullscreenControlsTimerRef.current = null;
+    }, 1800);
+  }, [isFullscreen]);
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current;
@@ -190,7 +217,7 @@ export function V5Player({
   const canUseKannada = hasMergedVideo(presentation, 'kannada');
 
   return (
-    <div className="v5-player" ref={rootRef}>
+    <div className="v5-player">
       <header className="v5-header">
         <button className="v5-header__back" onClick={onExit} title="Choose another job" type="button">
           <ArrowLeft size={19} />
@@ -218,7 +245,13 @@ export function V5Player({
         </label>
       </header>
 
-      <main className="v5-stage">
+      <main
+        className="v5-stage"
+        onPointerDown={revealFullscreenControls}
+        onPointerLeave={() => setFullscreenControlsVisible(false)}
+        onPointerMove={revealFullscreenControls}
+        ref={stageRef}
+      >
         <video
           autoPlay
           className="v5-video"
@@ -265,6 +298,39 @@ export function V5Player({
             />
           ))}
         </div>
+
+        {isFullscreen && (
+          <div
+            className={`v5-fullscreen-controls ${fullscreenControlsVisible ? 'is-visible' : ''}`}
+          >
+            <span>{formatV5Time(currentTime)}</span>
+            <input
+              aria-label="Fullscreen presentation progress"
+              max={Math.max(duration, 0)}
+              min={0}
+              onChange={(event) => {
+                const nextTime = Number(event.target.value);
+                if (videoRef.current) videoRef.current.currentTime = nextTime;
+                setCurrentTime(nextTime);
+              }}
+              step={0.05}
+              type="range"
+              value={Math.min(currentTime, duration || 0)}
+              style={{
+                '--v5-progress': `${duration > 0 ? (currentTime / duration) * 100 : 0}%`,
+              } as React.CSSProperties}
+            />
+            <span>{formatV5Time(duration)}</span>
+            <button
+              aria-label="Exit fullscreen"
+              onClick={() => document.exitFullscreen().catch(() => {})}
+              title="Exit fullscreen"
+              type="button"
+            >
+              <Minimize size={20} />
+            </button>
+          </div>
+        )}
       </main>
 
       <V5Controls
@@ -289,7 +355,7 @@ export function V5Player({
         }}
         onToggleFullscreen={() => {
           if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-          else rootRef.current?.requestFullscreen().catch(() => {});
+          else stageRef.current?.requestFullscreen().catch(() => {});
         }}
         onToggleMute={() => {
           if (!videoRef.current) return;
